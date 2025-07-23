@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>台灣天氣與災害資訊</title>
+    <!-- 載入 Tailwind CSS CDN，用於快速美化網頁 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 設定網頁的基礎字體為 Inter，並提供備用字體 */
+        body {
+            font-family: 'Inter', 'Noto Sans TC', sans-serif;
+            background-color: #1a202c; /* 深藍灰色背景 */
+            color: #e2e8f0; /* 淺灰色文字 */
+        }
+        /* 容器的基礎樣式 */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 1rem;
+        }
+        /* 卡片樣式 */
+        .card {
+            background-color: #2d3748; /* 較深的灰色，作為卡片背景 */
+            border-radius: 12px; /* 圓角 */
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); /* 陰影效果 */
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            transition: transform 0.2s ease-in-out; /* 平滑過渡效果 */
+        }
+        /* 標題樣式 */
+        h1 {
+            color: #f7fafc; /* 淺色標題 */
+            font-size: 3.5rem; /* 顯著放大標題字體 */
+            font-weight: extra-bold; /* 更粗的字體 */
+            text-align: left; /* 標題置於左上角 */
+            margin-bottom: 1rem; /* 調整間距 */
+            padding-top: 1.5rem;
+            text-shadow: 0 0 10px rgba(247, 250, 252, 0.5); /* 增加文字陰影，使其更顯眼 */
+        }
+        h2 {
+            color: #cbd5e0; /* 次要標題 */
+            font-size: 1.8rem;
+            font-weight: bold;
+            margin-bottom: 1rem;
+            border-bottom: 2px solid #4a5568; /* 底部線條 */
+            padding-bottom: 0.5rem;
+        }
+        h3 {
+            color: #a0aec0; /* 三級標題 */
+            font-size: 1.4rem;
+            font-weight: bold;
+            margin-top: 1rem;
+            margin-bottom: 0.8rem;
+        }
+        /* 載入中動畫 */
+        .loading-spinner {
+            border: 4px solid rgba(255, 255, 255, 0.2); /* 淺色邊框 */
+            border-left-color: #63b3ed; /* 淺藍色旋轉條 */
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        /* 錯誤訊息樣式 */
+        .error-message {
+            background-color: #fed7d7; /* 淺紅色背景 */
+            color: #c53030; /* 深紅色文字 */
+            border: 1px solid #e53e3e;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-top: 1rem;
+            text-align: center;
+        }
+        /* 列表樣式 */
+        ul {
+            list-style: none; /* 移除預設列表符號 */
+            padding: 0;
+        }
+        li {
+            margin-bottom: 0.5rem;
+            padding: 0.5rem 0;
+            border-bottom: 1px dashed #4a5568; /* 虛線分隔 */
+        }
+        li:last-child {
+            border-bottom: none; /* 最後一個項目沒有底線 */
+        }
+        /* 導航按鈕樣式 */
+        .nav-button {
+            background-color: #4a5568; /* 較深的藍灰色 */
+            color: #e2e8f0;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.2s ease-in-out, transform 0.1s ease-in-out;
+            border: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 0.75rem; /* 按鈕間距 */
+            margin-bottom: 1rem; /* 與下方內容間距 */
+        }
+        .nav-button:hover {
+            background-color: #63b3ed; /* 懸停時淺藍色 */
+            transform: translateY(-2px);
+        }
+        .nav-button.active {
+            background-color: #63b3ed; /* 啟用時淺藍色 */
+            color: #1a202c; /* 啟用時深色文字 */
+            box-shadow: 0 2px 8px rgba(99, 179, 237, 0.4); /* 啟用時發光效果 */
+        }
+
+        /* 縣市天氣預報的網格佈局 */
+        .weather-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); /* 自動填充，最小280px */
+            gap: 1rem; /* 網格間距 */
+        }
+        .weather-item {
+            background-color: #4a5568; /* 較深的藍灰色背景 */
+            color: #f7fafc; /* 淺色文字 */
+            border-radius: 8px;
+            padding: 1rem;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+        }
+        /* 警報/特報的顏色標示 */
+        .warning-active {
+            background-color: #c53030; /* 深紅色 */
+            border-left: 5px solid #e53e3e; /* 左側紅色邊框 */
+            color: #f7fafc; /* 淺色文字 */
+        }
+        .warning-inactive {
+            background-color: #3182ce; /* 深藍色 */
+            border-left: 5px solid #4299e1; /* 左側藍色邊框 */
+            color: #f7fafc; /* 淺色文字 */
+        }
+        /* 警報/特報內容中的標題顏色調整 */
+        .warning-active h3, .warning-inactive h3 {
+            color: #f7fafc;
+        }
+        .warning-active p, .warning-inactive p {
+            color: #e2e8f0;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100">
+    <div class="container">
+        <h1>台灣天氣與災害資訊中心</h1>
+
+        <!-- 導航按鈕區塊 -->
+        <div id="navigation" class="flex flex-wrap justify-start mb-6">
+            <button class="nav-button active" data-target="typhoonSection">颱風警報</button>
+            <button class="nav-button" data-target="significantEarthquakeSection">顯著有感地震報告</button>
+            <button class="nav-button" data-target="minorEarthquakeSection">小區域有感地震報告</button>
+            <button class="nav-button" data-target="weatherForecastSection">縣市天氣預報</button>
+            <button class="nav-button" data-target="warningsSection">警報特報</button>
+        </div>
+
+        <!-- 主要內容區塊的容器，現在會根據按鈕點擊顯示/隱藏 -->
+        <div id="contentSections">
+            <!-- 颱風警報區塊 -->
+            <div id="typhoonSection" class="card">
+                <h2>颱風警報</h2>
+                <div id="typhoonContent">
+                    <div class="loading-spinner"></div>
+                    <p class="text-center text-gray-400">載入中...</p>
+                </div>
+                <div id="typhoonError" class="error-message hidden"></div>
+            </div>
+
+            <!-- 顯著有感地震報告區塊 -->
+            <div id="significantEarthquakeSection" class="card hidden"> <!-- 預設隱藏 -->
+                <h2>顯著有感地震報告</h2>
+                <div id="significantEarthquakeContent">
+                    <div class="loading-spinner"></div>
+                    <p class="text-center text-gray-400">載入中...</p>
+                </div>
+                <div id="significantEarthquakeError" class="error-message hidden"></div>
+            </div>
+
+            <!-- 小區域有感地震報告區塊 -->
+            <div id="minorEarthquakeSection" class="card hidden"> <!-- 預設隱藏 -->
+                <h2>小區域有感地震報告</h2>
+                <div id="minorEarthquakeContent">
+                    <div class="loading-spinner"></div>
+                    <p class="text-center text-gray-400">載入中...</p>
+                </div>
+                <div id="minorEarthquakeError" class="error-message hidden"></div>
+            </div>
+
+            <!-- 各縣市今明天氣預報區塊 -->
+            <div id="weatherForecastSection" class="card hidden"> <!-- 預設隱藏 -->
+                <h2>各縣市今明天氣預報 (未來36小時)</h2>
+                <div id="weatherForecastContent" class="weather-grid">
+                    <div class="loading-spinner"></div>
+                    <p class="text-center text-gray-400">載入中...</p>
+                </div>
+                <div id="weatherForecastError" class="error-message hidden"></div>
+            </div>
+
+            <!-- 警報、特報區塊 -->
+            <div id="warningsSection" class="card hidden"> <!-- 預設隱藏 -->
+                <h2>警報、特報</h2>
+                <div id="warningsContent">
+                    <div class="loading-spinner"></div>
+                    <p class="text-center text-gray-400">載入中...</p>
+                </div>
+                <div id="warningsError" class="error-message hidden"></div>
+            </div>
+        </div> <!-- End of contentSections -->
+
+        <footer class="text-center text-gray-400 text-sm mt-8 pb-4">
+            <p>&copy; 2025 台灣天氣與災害資訊。資料來源：中央氣象署開放資料平台。</p>
+            <p>請注意：本網頁僅供參考，實際天氣及災害資訊請以中央氣象署官方發布為準。</p>
+        </footer>
+    </div>
+
+    <script>
+        // *** 重要：請在此處填入你的中央氣象署開放資料平台 API Key ***
+        // 如何取得 API Key：
+        // 1. 前往中央氣象署開放資料平台：https://opendata.cwa.gov.tw/
+        // 2. 點擊右上角的「登入/註冊」並完成會員註冊。
+        // 3. 登入後，點選「API授權碼」->「取得授權碼」，即可獲得一組專屬的 API Key。
+        // 4. 將該 API Key 複製並貼到下方引號內。
+        const CWA_API_KEY = "CWA-1F9FD71C-D858-4545-855C-61AE0FF69473"; // <--- 你的 API Key 已填入此處
+
+        // API 端點與資料 ID
+        const CWA_BASE_URL = "https://opendata.cwa.gov.tw/api/v1/rest/datastore/";
+        // CORS 代理服務的 URL，已移除，因為它可能導致 404 錯誤。
+        // 直接從 CWA API 獲取資料可能會遇到 CORS 限制。
+
+        const API_ENDPOINTS = {
+            typhoon: "W-C0034-005", // 颱風消息與警報-熱帶氣旋路徑
+            significantEarthquake: "E-A0015-001", // 顯著有感地震報告
+            minorEarthquake: "E-A0016-001", // 小區域有感地震報告
+            weatherForecast: "F-D0047-089", // 各縣市今明天氣預報
+            warnings: "W-C0033-002" // 天氣特報-各別天氣警特報之內容及所影響之區域
+        };
+
+        // 輔助函數：顯示載入狀態
+        function showLoading(elementId) {
+            const contentDiv = document.getElementById(elementId + 'Content');
+            const errorDiv = document.getElementById(elementId + 'Error');
+            contentDiv.innerHTML = `<div class="loading-spinner"></div><p class="text-center text-gray-400">載入中...</p>`;
+            errorDiv.classList.add('hidden');
+        }
+
+        // 輔助函數：顯示錯誤訊息
+        function showError(elementId, message) {
+            const contentDiv = document.getElementById(elementId + 'Content');
+            const errorDiv = document.getElementById(elementId + 'Error');
+            contentDiv.innerHTML = `<p class="text-center text-red-400">資料載入失敗。</p><p class="text-center text-red-400 text-sm mt-1">請檢查 Console (F12) 獲取詳細錯誤資訊。</p>`;
+            errorDiv.textContent = `錯誤：${message}`;
+            errorDiv.classList.remove('hidden');
+        }
+
+        // 輔助函數：從 CWA API 取得資料 (JSON 格式)
+        async function fetchData(apiId, params = {}) {
+            // 在每次呼叫 fetchData 時檢查 API Key
+            if (CWA_API_KEY === "YOUR_CWA_API_KEY_HERE" || CWA_API_KEY === "") {
+                throw new Error("API Key 未設定。請在程式碼中填入你的中央氣象署 API Key。");
+            }
+
+            let targetUrl = new URL(`${CWA_BASE_URL}${apiId}`);
+            targetUrl.searchParams.append('Authorization', CWA_API_KEY);
+            
+            // 為所有 API 呼叫添加 limit 參數，確保即使沒有最新資料也能得到回應
+            if (!params.limit) { // 如果 params 中沒有指定 limit，則添加預設值
+                targetUrl.searchParams.append('limit', '5'); 
+            }
+            for (const key in params) {
+                if (key !== 'limit') { // 避免重複添加 limit
+                    targetUrl.searchParams.append(key, params[key]);
+                }
+            }
+
+            // 顯示實際發送的 URL 到 Console
+            console.log(`嘗試獲取資料的 API URL: ${targetUrl.toString()}`);
+
+            try {
+                // 直接從 CWA API 獲取資料，不再經過 CORS 代理
+                const response = await fetch(targetUrl.toString()); 
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    // 如果是 404 錯誤，可能是目前沒有資料，提供更友善的提示
+                    if (response.status === 404) {
+                        throw new Error(`目前沒有相關資料，或資料編號 '${apiId}' 有誤。`);
+                    }
+                    throw new Error(`HTTP 錯誤！狀態碼: ${response.status} - ${errorText}`);
+                }
+                const data = await response.json();
+                if (data.success === false) {
+                    throw new Error(`API 回傳錯誤: ${data.message}`);
+                }
+                return data.records;
+            } catch (error) {
+                console.error(`取得 ${apiId} 資料時發生錯誤:`, error);
+                // 針對 Failed to fetch 錯誤提供更具體的提示 (通常是 CORS 錯誤)
+                if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+                    throw new Error(`無法連線到中央氣象署 API，這很可能是因為「跨來源資源共用 (CORS)」安全限制。瀏覽器不允許直接從此連結獲取資料。`);
+                }
+                throw error; // 拋出其他錯誤
+            }
+        }
+
+        // 取得並顯示颱風警報 (W-C0034-005)
+        async function getTyphoonWarnings() {
+            showLoading('typhoon');
+            try {
+                const records = await fetchData(API_ENDPOINTS.typhoon);
+                const contentDiv = document.getElementById('typhoonContent');
+                contentDiv.innerHTML = ''; // 清空內容
+
+                // W-C0034-005 的資料結構是 records.tropicalCyclone
+                const cycloneList = records.tropicalCyclone ?? []; // 使用 nullish coalescing operator 確保為陣列
+
+                if (cycloneList.length === 0) {
+                    contentDiv.innerHTML = '<p class="text-center text-gray-400">目前無颱風消息或警報。</p>';
+                    return;
+                }
+
+                cycloneList.forEach((cyclone) => {
+                    const name = cyclone.typhoonName ?? "未知";
+                    // 根據新的資料結構，狀態、風速、氣壓可能在 analysisData.forecastData[0] 或其他位置
+                    // 這裡先假設在 forecastData[0]，如果沒有則顯示 '無資料'
+                    const forecastData = cyclone.analysisData?.forecastData?.[0];
+                    const state = forecastData?.state ?? "無資料";
+                    const windSpeed = forecastData?.maxWindSpeed ?? "？";
+                    const pressure = forecastData?.pressure ?? "？";
+
+                    // 檢查是否有 activeWarning 屬性
+                    const hasActiveWarning = cyclone.activeWarning && cyclone.activeWarning.length > 0;
+                    let warningContent = '';
+                    if (hasActiveWarning) {
+                        warningContent = cyclone.activeWarning[0].warningContent.replace(/\n/g, '<br>') || '無詳細內容';
+                    } else {
+                        warningContent = '目前無發布颱風警報。';
+                    }
+
+                    const div = document.createElement('div'); // 修正：這裡需要重新宣告 div
+                    div.className = 'mb-4 p-4 bg-red-800 border border-red-700 rounded-lg shadow-sm'; /* 暗色系調整 */
+                    div.innerHTML = `
+                        <h3 class="text-red-300 font-semibold">颱風名稱: ${name}</h3>
+                        <p class="text-red-200"><strong>發布時間:</strong> ${cyclone.issueTime || 'N/A'}</p>
+                        <p class="text-red-200"><strong>颱風狀態:</strong> ${state}</p>
+                        <p class="text-red-200"><strong>風速:</strong> ${windSpeed} m/s</p>
+                        <p class="text-red-200"><strong>氣壓:</strong> ${pressure} hPa</p>
+                        <p class="text-red-100"><strong>警報內容:</strong> ${warningContent}</p>
+                        <p class="text-red-100"><strong>中心位置:</strong> ${cyclone.centerLocation?.latitude}°N, ${cyclone.centerLocation?.longitude}°E</p>
+                        <p class="text-red-100"><strong>移動方向/速度:</strong> ${cyclone.movement?.direction || 'N/A'} ${cyclone.movement?.speed?.value || 'N/A'} ${cyclone.movement?.speed?.unit || 'N/A'}</p>
+                    `;
+                    contentDiv.appendChild(div);
+                });
+            } catch (error) {
+                showError('typhoon', error.message);
+            }
+        }
+
+        // 取得並顯示顯著有感地震報告 (E-A0015-001)
+        async function getSignificantEarthquakeReports() {
+            showLoading('significantEarthquake');
+            try {
+                const records = await fetchData(API_ENDPOINTS.significantEarthquake);
+                const contentDiv = document.getElementById('significantEarthquakeContent');
+                contentDiv.innerHTML = ''; // 清空內容
+
+                // E-A0015-001 的資料結構是 records.earthquake
+                const earthquakeList = records.earthquake ?? [];
+
+                if (earthquakeList.length === 0) {
+                    contentDiv.innerHTML = '<p class="text-center text-gray-400">目前無顯著有感地震報告。</p>';
+                    return;
+                }
+
+                earthquakeList.forEach(eq => {
+                    const div = document.createElement('div');
+                    div.className = 'mb-4 p-4 bg-blue-800 border border-blue-700 rounded-lg shadow-sm'; /* 暗色系調整 */
+                    div.innerHTML = `
+                        <h3 class="text-blue-300 font-semibold">${eq.ReportContent?.ReportTime ?? 'N/A'} 地震報告</h3>
+                        <p class="text-blue-200"><strong>發生時間:</strong> ${eq.EarthquakeInfo?.OriginTime ?? 'N/A'}</p>
+                        <p class="text-blue-200"><strong>震央位置:</strong> ${eq.EarthquakeInfo?.Epicenter?.Location ?? 'N/A'} (${eq.EarthquakeInfo?.Epicenter?.Latitude ?? 'N/A'}°N, ${eq.EarthquakeInfo?.Epicenter?.Longitude ?? 'N/A'}°E)</p>
+                        <p class="text-blue-200"><strong>深度:</strong> ${eq.EarthquakeInfo?.FocalDepth?.Value ?? 'N/A'} ${eq.EarthquakeInfo?.FocalDepth?.Unit ?? 'N/A'}</p>
+                        <p class="text-blue-200"><strong>規模:</strong> ${eq.EarthquakeInfo?.Magnitude?.MagnitudeValue ?? 'N/A'} (${eq.EarthquakeInfo?.Magnitude?.MagnitudeType ?? 'N/A'})</p>
+                        <p class="text-blue-200"><strong>最大震度:</strong> ${eq.ReportContent?.Intensity?.ShakingArea?.[0]?.AreaName ?? 'N/A'} ${eq.ReportContent?.Intensity?.ShakingArea?.[0]?.AreaIntensity?.Value ?? 'N/A'}級</p>
+                        <p class="text-blue-100">${eq.ReportContent?.Web ?? '無詳細內容'}</p>
+                        ${eq.ReportImageURI ? `<img src="${eq.ReportImageURI}" alt="地震報告圖" class="mt-2 rounded-md max-w-full h-auto">` : ''}
+                    `;
+                    contentDiv.appendChild(div);
+                });
+            } catch (error) {
+                showError('significantEarthquake', error.message);
+            }
+        }
+
+        // 取得並顯示小區域有感地震報告 (E-A0016-001)
+        async function getMinorEarthquakeReports() {
+            showLoading('minorEarthquake');
+            try {
+                const records = await fetchData(API_ENDPOINTS.minorEarthquake);
+                const contentDiv = document.getElementById('minorEarthquakeContent');
+                contentDiv.innerHTML = ''; // 清空內容
+
+                // E-A0016-001 的資料結構也是 records.earthquake
+                const earthquakeList = records.earthquake ?? [];
+
+                if (earthquakeList.length === 0) {
+                    contentDiv.innerHTML = '<p class="text-center text-gray-400">目前無小區域有感地震報告。</p>';
+                    return;
+                }
+
+                earthquakeList.forEach(eq => {
+                    const div = document.createElement('div');
+                    div.className = 'mb-4 p-4 bg-purple-800 border border-purple-700 rounded-lg shadow-sm'; /* 暗色系調整 */
+                    div.innerHTML = `
+                        <h3 class="text-purple-300 font-semibold">${eq.ReportContent?.ReportTime ?? 'N/A'} 小區域地震報告</h3>
+                        <p class="text-purple-200"><strong>發生時間:</strong> ${eq.EarthquakeInfo?.OriginTime ?? 'N/A'}</p>
+                        <p class="text-purple-200"><strong>震央位置:</strong> ${eq.EarthquakeInfo?.Epicenter?.Location ?? 'N/A'} (${eq.EarthquakeInfo?.Epicenter?.Latitude ?? 'N/A'}°N, ${eq.EarthquakeInfo?.Epicenter?.Longitude ?? 'N/A'}°E)</p>
+                        <p class="text-purple-200"><strong>深度:</strong> ${eq.EarthquakeInfo?.FocalDepth?.Value ?? 'N/A'} ${eq.EarthquakeInfo?.FocalDepth?.Unit ?? 'N/A'}</p>
+                        <p class="text-purple-200"><strong>規模:</strong> ${eq.EarthquakeInfo?.Magnitude?.MagnitudeValue ?? 'N/A'} (${eq.EarthquakeInfo?.Magnitude?.MagnitudeType ?? 'N/A'})</p>
+                        <p class="text-purple-100">${eq.ReportContent?.Web ?? '無詳細內容'}</p>
+                        ${eq.ReportImageURI ? `<img src="${eq.ReportImageURI}" alt="地震報告圖" class="mt-2 rounded-md max-w-full h-auto">` : ''}
+                    `;
+                    contentDiv.appendChild(div);
+                });
+            } catch (error) {
+                showError('minorEarthquake', error.message);
+            }
+        }
+
+        // 取得並顯示各縣市今明天氣預報 (F-D0047-089)
+        async function getWeatherForecast() {
+            showLoading('weatherForecast');
+            try {
+                // 取得未來36小時天氣預報，設定參數為 'F-D0047-089'
+                const records = await fetchData(API_ENDPOINTS.weatherForecast, {
+                    'elementName': 'Wx,PoP,MinT,MaxT,CI' // 天氣現象、降雨機率、最低溫、最高溫、舒適度
+                });
+                const contentDiv = document.getElementById('weatherForecastContent');
+                contentDiv.innerHTML = ''; // 清空內容
+                contentDiv.className = 'weather-grid'; // 確保網格佈局
+
+                const locationList = records.location ?? [];
+
+                if (locationList.length === 0) {
+                    contentDiv.innerHTML = '<p class="text-center text-gray-400">無縣市天氣預報資料。</p>';
+                    return;
+                }
+
+                locationList.forEach(loc => {
+                    const locationName = loc.locationName ?? 'N/A';
+                    const weatherElements = {};
+
+                    // 將所有天氣元素整理到一個物件中，方便查找
+                    loc.weatherElement?.forEach(element => {
+                        weatherElements[element.elementName] = element.time;
+                    });
+
+                    // 取得今天和明天的預報時段 (通常是前兩個時段)
+                    const forecastTimes = weatherElements.Wx ?? []; // 假設 Wx (天氣現象) 有完整的時間軸
+
+                    if (forecastTimes.length >= 2) {
+                        const todayForecast = forecastTimes[0];
+                        const tomorrowForecast = forecastTimes[1];
+
+                        const todayPoP = weatherElements.PoP?.[0]?.parameter?.[0]?.parameterValue ?? 'N/A';
+                        const todayMinT = weatherElements.MinT?.[0]?.parameter?.[0]?.parameterValue ?? 'N/A';
+                        const todayMaxT = weatherElements.MaxT?.[0]?.parameter?.[0]?.parameterValue ?? 'N/A';
+                        const todayCI = weatherElements.CI?.[0]?.parameter?.[0]?.parameterValue ?? 'N/A';
+
+                        const tomorrowPoP = weatherElements.PoP?.[1]?.parameter?.[0]?.parameterValue ?? 'N/A';
+                        const tomorrowMinT = weatherElements.MinT?.[1]?.parameter?.[0]?.parameterValue ?? 'N/A';
+                        const tomorrowMaxT = weatherElements.MaxT?.[1]?.parameter?.[0]?.parameterValue ?? 'N/A';
+                        const tomorrowCI = weatherElements.CI?.[1]?.parameter?.[0]?.parameterValue ?? 'N/A';
+
+
+                        const div = document.createElement('div');
+                        div.className = 'weather-item';
+                        div.innerHTML = `
+                            <h3>${locationName}</h3>
+                            <p class="text-sm text-gray-300">更新時間: ${loc.dataTime ?? 'N/A'}</p>
+                            <hr class="my-2 border-gray-600">
+                            <h4 class="text-gray-200">今天 (${todayForecast.startTime?.substring(5, 10) ?? 'N/A'})</h4>
+                            <p><strong>天氣:</strong> ${todayForecast.parameter?.[0]?.parameterName ?? 'N/A'}</p>
+                            <p><strong>降雨機率:</strong> ${todayPoP}%</p>
+                            <p><strong>溫度:</strong> ${todayMinT}°C ~ ${todayMaxT}°C</p>
+                            <p><strong>舒適度:</strong> ${todayCI}</p>
+                            <h4 class="mt-3 text-gray-200">明天 (${tomorrowForecast.startTime?.substring(5, 10) ?? 'N/A'})</h4>
+                            <p><strong>天氣:</strong> ${tomorrowForecast.parameter?.[0]?.parameterName ?? 'N/A'}</p>
+                            <p><strong>降雨機率:</strong> ${tomorrowPoP}%</p>
+                            <p><strong>溫度:</strong> ${tomorrowMinT}°C ~ ${tomorrowMaxT}°C</p>
+                            <p><strong>舒適度:</strong> ${tomorrowCI}</p>
+                        `;
+                        contentDiv.appendChild(div);
+                    }
+                });
+            } catch (error) {
+                showError('weatherForecast', error.message);
+            }
+        }
+
+        // 取得並顯示警報、特報 (W-C0033-002)
+        async function getWarnings() {
+            showLoading('warnings');
+            try {
+                const records = await fetchData(API_ENDPOINTS.warnings);
+                const contentDiv = document.getElementById('warningsContent');
+                contentDiv.innerHTML = ''; // 清空內容
+
+                // W-C0033-002 的資料結構是 records.alert
+                const alertList = records.alert ?? [];
+
+                if (alertList.length === 0) {
+                    contentDiv.innerHTML = '<p class="text-center text-gray-400">目前無警報或特報。</p>';
+                    return;
+                }
+
+                alertList.forEach(alert => {
+                    const div = document.createElement('div');
+                    const isActive = alert.status === '發布中'; // 判斷是否為發布中
+                    div.className = `mb-4 p-4 rounded-lg shadow-sm ${isActive ? 'warning-active' : 'warning-inactive'}`;
+                    div.innerHTML = `
+                        <h3 class="${isActive ? 'text-red-300' : 'text-blue-300'} font-semibold">${alert.issueTime ?? 'N/A'} 發布 (${alert.status ?? 'N/A'})</h3>
+                        <p><strong>特報種類:</strong> ${alert.alertType || 'N/A'}</p>
+                        <p><strong>影響區域:</strong> ${alert.affectedArea || 'N/A'}</p>
+                        <p>${alert.description?.replace(/\n/g, '<br>') || '無詳細內容'}</p>
+                    `;
+                    contentDiv.appendChild(div);
+                });
+            } catch (error) {
+                showError('warnings', error.message);
+            }
+        }
+
+        // 顯示指定區塊的函數
+        function showSection(targetId) {
+            // 隱藏所有內容區塊
+            document.querySelectorAll('#contentSections > .card').forEach(section => {
+                section.classList.add('hidden');
+            });
+            // 顯示目標區塊
+            document.getElementById(targetId).classList.remove('hidden');
+
+            // 更新導航按鈕的啟用狀態
+            document.querySelectorAll('.nav-button').forEach(button => {
+                if (button.dataset.target === targetId) {
+                    button.classList.add('active');
+                } else {
+                    button.classList.remove('active');
+                }
+            });
+        }
+
+        // 載入所有資料的函數 (只在頁面載入時執行一次)
+        async function loadAllData() {
+            // 使用 Promise.all 同時載入所有資料，提高效率
+            await Promise.all([
+                getTyphoonWarnings(),
+                getSignificantEarthquakeReports(), // 呼叫顯著有感地震報告
+                getMinorEarthquakeReports(), // 呼叫小區域有感地震報告
+                getWeatherForecast(),
+                getWarnings()
+            ]).catch(error => {
+                console.error("載入部分或全部資料時發生錯誤:", error);
+                // 這裡不需要額外處理，因為每個函數內部已經有錯誤處理
+            });
+        }
+
+        // 頁面載入完成後執行
+        document.addEventListener('DOMContentLoaded', () => {
+            loadAllData(); // 首次載入所有資料
+
+            // 設定導航按鈕的點擊事件
+            document.querySelectorAll('.nav-button').forEach(button => {
+                button.addEventListener('click', (event) => {
+                    const targetId = event.target.dataset.target;
+                    showSection(targetId);
+                });
+            });
+
+            // 預設顯示颱風警報區塊
+            showSection('typhoonSection');
+        });
+    </script>
+</body>
+</html>
