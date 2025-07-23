@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>台灣天氣與災害資訊</title>
+    <!-- 載入 Tailwind CSS CDN，用於快速美化網頁 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 設定網頁的基礎字體為 Inter，並提供備用字體 */
+        body {
+            font-family: 'Inter', 'Noto Sans TC', sans-serif;
+            background-color: #1a202c; /* 深藍灰色背景 */
+            color: #e2e8f0; /* 淺灰色文字 */
+        }
+        /* 容器的基礎樣式 */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 1rem;
+        }
+        /* 卡片樣式 */
+        .card {
+            background-color: #2d3748; /* 較深的灰色，作為卡片背景 */
+            border-radius: 12px; /* 圓角 */
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); /* 陰影效果 */
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            transition: transform 0.2s ease-in-out; /* 平滑過渡效果 */
+        }
+        /* 標題樣式 */
+        h1 {
+            color: #f7fafc; /* 淺色標題 */
+            font-size: 3.5rem; /* 顯著放大標題字體 */
+            font-weight: extra-bold; /* 更粗的字體 */
+            text-align: left; /* 標題置於左上角 */
+            margin-bottom: 1rem; /* 調整間距 */
+            padding-top: 1.5rem;
+            text-shadow: 0 0 10px rgba(247, 250, 252, 0.5); /* 增加文字陰影，使其更顯眼 */
+        }
+        /* 可拉縮的 h2 和 h3 標題樣式 */
+        h2.collapsible-header, h3.collapsible-header {
+            color: #cbd5e0; /* 次要標題顏色 */
+            font-size: 1.8rem; /* h2 的字體大小 */
+            font-weight: bold;
+            margin-bottom: 1rem;
+            border-bottom: 2px solid #4a5568; /* 底部線條 */
+            padding-bottom: 0.5rem;
+            display: flex; /* 讓標題和圖示在同一行 */
+            justify-content: space-between; /* 標題靠左，圖示靠右 */
+            align-items: center; /* 垂直置中 */
+            cursor: pointer; /* 讓標題看起來可點擊 */
+        }
+        /* 針對 h3 的字體大小調整 */
+        h3.collapsible-header {
+            font-size: 1.4rem;
+            margin-top: 1rem;
+            margin-bottom: 0.8rem;
+        }
+
+        /* 載入中動畫 */
+        .loading-spinner {
+            border: 4px solid rgba(255, 255, 255, 0.2); /* 淺色邊框 */
+            border-left-color: #63b3ed; /* 淺藍色旋轉條 */
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        /* 錯誤訊息樣式 */
+        .error-message {
+            background-color: #fed7d7; /* 淺紅色背景 */
+            color: #c53030; /* 深紅色文字 */
+            border: 1px solid #e53e3e;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-top: 1rem;
+            text-align: center;
+        }
+        /* 列表樣式 */
+        ul {
+            list-style: none; /* 移除預設列表符號 */
+            padding: 0;
+        }
+        li {
+            margin-bottom: 0.5rem;
+            padding: 0.5rem 0;
+            border-bottom: 1px dashed #4a5568; /* 虛線分隔 */
+        }
+        li:last-child {
+            border-bottom: none; /* 最後一個項目沒有底線 */
+        }
+        /* 導航按鈕樣式 */
+        .nav-button {
+            background-color: #4a5568; /* 較深的藍灰色 */
+            color: #e2e8f0;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.2s ease-in-out, transform 0.1s ease-in-out;
+            border: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 0.75rem; /* 按鈕間距 */
+            margin-bottom: 1rem; /* 與下方內容間距 */
+        }
+        .nav-button:hover {
+            background-color: #63b3ed; /* 懸停時淺藍色 */
+            transform: translateY(-2px);
+        }
+        .nav-button.active {
+            background-color: #63b3ed; /* 啟用時淺藍色 */
+            color: #1a202c; /* 啟用時深色文字 */
+            box-shadow: 0 2px 8px rgba(99, 179, 237, 0.4); /* 啟用時發光效果 */
+        }
+
+        /* 網格佈局 */
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); /* 自動填充，最小280px */
+            gap: 1rem; /* 網格間距 */
+        }
+        .grid-item {
+            background-color: #4a5568; /* 較深的藍灰色背景 */
+            color: #f7fafc; /* 淺色文字 */
+            border-radius: 8px;
+            padding: 1rem;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+        }
+        /* 警報/特報的顏色標示 */
+        .warning-active {
+            background-color: #c53030; /* 深紅色 */
+            border-left: 5px solid #e53e3e; /* 左側紅色邊框 */
+            color: #f7fafc; /* 淺色文字 */
+        }
+        .warning-inactive {
+            background-color: #3182ce; /* 深藍色 */
+            border-left: 5px solid #4299e1; /* 左側藍色邊框 */
+            color: #f7fafc; /* 淺色文字 */
+        }
+        /* 警報/特報內容中的標題顏色調整 */
+        .warning-active h3, .warning-inactive h3 {
+            color: #f7fafc;
+        }
+        .warning-active p, .warning-inactive p {
+            color: #e2e8f0;
+        }
+
+        /* 拉縮功能樣式 */
+        .collapsible-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out; /* 平滑過渡效果 */
+        }
+        .collapsible-content.expanded {
+            max-height: 2000px; /* 足夠大的值，確保內容能完全展開 */
+        }
+        .collapse-icon {
+            transition: transform 0.3s ease-out; /* 圖示旋轉動畫 */
+        }
+        .collapse-icon.rotated {
+            transform: rotate(180deg); /* 展開時圖示旋轉 */
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100">
+    <div class="container">
+        <h1>台灣天氣與災害資訊中心</h1>
+
+        <!-- 導航按鈕區塊 (沒有拉縮功能) -->
+        <div id="navigation" class="flex flex-wrap justify-start mb-6">
+            <button class="nav-button active" data-target="typhoonSection">颱風警報</button>
+            <button class="nav-button" data-target="earthquakeSection">地震專區</button>
+            <button class="nav-button" data-target="monitoringSection">監測專區</button>
+            <button class="nav-button" data-target="warningsSection">警報特報</button>
+        </div>
+
+        <!-- 主要內容區塊的容器，每個卡片現在有自己的內容顯示邏輯 -->
+        <div id="contentSections">
+            <!-- 颱風警報區塊 -->
+            <div id="typhoonSection" class="card">
+                <h2 class="collapsible-header">颱風警報 <span class="collapse-icon">▼</span></h2>
+                <div class="collapsible-content"> <!-- 內容包裹在可拉縮 div 中 -->
+                    <div id="typhoonContent">
+                        <div class="loading-spinner"></div>
+                        <p class="text-center text-gray-400">載入中...</p>
+                    </div>
+                    <div id="typhoonError" class="error-message hidden"></div>
+                </div>
+            </div>
+
+            <!-- 地震專區 (內含可拉縮的子專區) -->
+            <div id="earthquakeSection" class="card hidden">
+                <h2 class="collapsible-header">地震專區 <span class="collapse-icon">▼</span></h2>
+                <div class="collapsible-content"> <!-- 這個 div 的內容由點擊 "地震專區" h2 展開/收合 -->
+                    <!-- 顯著有感地震報告子專區 -->
+                    <div id="significantEarthquakeSubSection">
+                        <h3 class="collapsible-header">顯著有感地震報告 <span class="collapse-icon">▼</span></h3>
+                        <div class="collapsible-content"> <!-- 這個 div 的內容由點擊 "顯著有感地震報告" h3 展開/收合 -->
+                            <div id="significantEarthquakeContent">
+                                <div class="loading-spinner"></div>
+                                <p class="text-center text-gray-400">載入中...</p>
+                            </div>
+                            <div id="significantEarthquakeError" class="error-message hidden"></div>
+                        </div>
+                    </div>
+
+                    <!-- 小區域有感地震報告子專區 -->
+                    <div id="minorEarthquakeSubSection" class="mt-6">
+                        <h3 class="collapsible-header">小區域有感地震報告 <span class="collapse-icon">▼</span></h3>
+                        <div class="collapsible-content"> <!-- 這個 div 的內容由點擊 "小區域有感地震報告" h3 展開/收合 -->
+                            <div id="minorEarthquakeContent">
+                                <div class="loading-spinner"></div>
+                                <p class="text-center text-gray-400">載入中...</p>
+                            </div>
+                            <div id="minorEarthquakeError" class="error-message hidden"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 監測專區區塊 -->
+            <div id="monitoringSection" class="card hidden">
+                <h2 class="collapsible-header">監測專區 <span class="collapse-icon">▼</span></h2>
+                <div class="collapsible-content">
+                    <!-- 自動雨量站資料子專區 (CWA) -->
+                    <div id="automaticRainfallSubSection">
+                        <h3 class="collapsible-header">自動雨量站資料 <span class="collapse-icon">▼</span></h3>
+                        <div class="collapsible-content">
+                            <div id="automaticRainfallContent">
+                                <div class="loading-spinner"></div>
+                                <p class="text-center text-gray-400">載入中...</p>
+                            </div>
+                            <div id="automaticRainfallError" class="error-message hidden"></div>
+                        </div>
+                    </div>
+
+                    <!-- 日出日沒及太陽過中天時刻子專區 (CWA) -->
+                    <div id="sunriseSunsetSubSection" class="mt-6">
+                        <h3 class="collapsible-header">日出日沒及太陽過中天時刻 <span class="collapse-icon">▼</span></h3>
+                        <div class="collapsible-content">
+                            <div id="sunriseSunsetContent">
+                                <div class="loading-spinner"></div>
+                                <p class="text-center text-gray-400">載入中...</p>
+                            </div>
+                            <div id="sunriseSunsetError" class="error-message hidden"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 警報、特報區塊 -->
+            <div id="warningsSection" class="card hidden">
+                <h2 class="collapsible-header">警報、特報 <span class="collapse-icon">▼</span></h2>
+                <div class="collapsible-content"> <!-- 內容包裹在可拉縮 div 中 -->
+                    <div id="warningsContent">
+                        <div class="loading-spinner"></div>
+                        <p class="text-center text-gray-400">載入中...</p>
+                    </div>
+                    <div id="warningsError" class="error-message hidden"></div>
+                </div>
+            </div>
+        </div> <!-- End of contentSections -->
+
+        <footer class="text-center text-gray-400 text-sm mt-8 pb-4">
+            <p>&copy; 2025 台灣天氣與災害資訊。資料來源：中央氣象署開放資料平台。</p>
+            <p>請注意：本網頁僅供參考，實際天氣及災害資訊請以中央氣象署官方發布為準。</p>
+        </footer>
+    </div>
+
+    <script>
+        // *** 重要：請在此處填入你的中央氣象署開放資料平台 API Key ***
+        // 如何取得 API Key：
+        // 1. 前往中央氣象署開放資料平台：https://opendata.cwa.gov.tw/
+        // 2. 點擊右上角的「登入/註冊」並完成會員註冊。
+        // 3. 登入後，點選「API授權碼」->「取得授權碼」，即可獲得一組專屬的 API Key。
+        // 4. 將該 API Key 複製並貼到下方引號內。
+        const CWA_API_KEY = "CWA-1F9FD71C-D858-4545-855C-61AE0FF69473"; // <--- 你的 CWA API Key 已填入此處
+
+        // NCDR API Token (已移除相關 NCDR 資料，此處保留為空字串，或可直接移除此行)
+        const NCDR_API_TOKEN = ""; 
+
+        // API 基礎 URL
+        const CWA_BASE_URL = "https://opendata.cwa.gov.tw/api/v1/rest/datastore/";
+        // NCDR API 基礎 URL (已移除相關 NCDR 資料，此處保留為空字串，或可直接移除此行)
+        const NCDR_BASE_URL = ""; 
+
+        const API_ENDPOINTS = {
+            typhoon: "W-C0034-005", // 颱風消息與警報-熱帶氣旋路徑 (CWA)
+            significantEarthquake: "E-A0015-001", // 顯著有感地震報告 (CWA)
+            minorEarthquake: "E-A0016-001", // 小區域有感地震報告 (CWA)
+            warnings: "W-C0033-002", // 天氣特報-各別天氣警特報之內容及所影響之區域 (CWA)
+            automaticRainfall: "O-A0002-001", // 自動雨量站-雨量觀測資料 (CWA)
+            sunriseSunset: "A-B0062-001" // 日出日沒時刻-全臺各縣市年度逐日日出日沒時刻資料 (CWA)
+        };
+
+        // 輔助函數：顯示載入狀態
+        function showLoading(elementId) {
+            const contentDiv = document.getElementById(elementId + 'Content');
+            const errorDiv = document.getElementById(elementId + 'Error');
+            contentDiv.innerHTML = `<div class="loading-spinner"></div><p class="text-center text-gray-400">載入中...</p>`;
+            errorDiv.classList.add('hidden');
+        }
+
+        // 輔助函數：顯示錯誤訊息
+        function showError(elementId, message) {
+            const contentDiv = document.getElementById(elementId + 'Content');
+            const errorDiv = document.getElementById(elementId + 'Error');
+            contentDiv.innerHTML = `<p class="text-center text-red-400">資料載入失敗。</p><p class="text-center text-red-400 text-sm mt-1">請檢查 Console (F12) 獲取詳細錯誤資訊。</p>`;
+            errorDiv.textContent = `錯誤：${message}`;
+            errorDiv.classList.remove('hidden');
+        }
+
+        /**
+         * 從中央氣象署 (CWA) API 取得資料 (JSON 格式)
+         * 直接連線，不使用 CORS 代理
+         * @param {string} apiId CWA API 的資料 ID
+         * @param {object} params 查詢參數
+         * @returns {Promise<object>} API 回傳的 records 物件
+         */
+        async function fetchCWAData(apiId, params = {}) {
+            if (CWA_API_KEY === "YOUR_CWA_API_KEY_HERE" || CWA_API_KEY === "") {
+                throw new Error("CWA API Key 未設定。請在程式碼中填入你的中央氣象署 API Key。");
+            }
+
+            let cwaUrl = new URL(`${CWA_BASE_URL}${apiId}`);
+            cwaUrl.searchParams.append('Authorization', CWA_API_KEY);
+            
+            // 針對 A-B0062-001，預設 limit 設為 2000，以獲取足夠的縣市資料
+            if (apiId === API_ENDPOINTS.sunriseSunset && !params.limit) {
+                cwaUrl.searchParams.append('limit', '2000'); 
+            } else if (!params.limit) { 
+                cwaUrl.searchParams.append('limit', '5'); 
+            }
+
+            for (const key in params) {
+                if (key !== 'limit') {
+                    cwaUrl.searchParams.append(key, params[key]);
+                }
+            }
+
+            // 直接連線 CWA API，不使用代理
+            const targetUrl = cwaUrl.toString();
+            console.log(`嘗試獲取 CWA 資料 (直接連線): ${targetUrl}`);
+
+            try {
+                const response = await fetch(targetUrl); 
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    let errorJson = null;
+                    try {
+                        errorJson = JSON.parse(errorText);
+                    } catch (e) {
+                        // 如果不是 JSON 格式，則忽略
+                    }
+
+                    if (response.status === 404) {
+                        throw new Error(`目前沒有相關資料，或資料編號 '${apiId}' 有誤。`);
+                    } else if (response.status === 400 && errorJson && errorJson.Error && errorJson.Error.includes("is not a valid resource")) {
+                        throw new Error(`CWA API 錯誤：資料 ID '${apiId}' 可能無效，或您的 API Key 無效/過期。請確認您的中央氣象署 API Key 是否正確且有效。原始錯誤: ${errorJson.Error}`);
+                    }
+                    throw new Error(`HTTP 錯誤！狀態碼: ${response.status} - ${errorText}`);
+                }
+                const data = await response.json();
+                if (data.success === false) {
+                    throw new Error(`CWA API 回傳錯誤: ${data.message}`);
+                }
+                return data.records;
+            } catch (error) {
+                console.error(`取得 CWA ${apiId} 資料時發生錯誤:`, error);
+                if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+                    throw new Error(`無法連線到中央氣象署 API，這很可能是因為「跨來源資源共用 (CORS)」安全限制。請嘗試將網頁部署到支援 CORS 的伺服器，或重新啟用 CORS 代理。`);
+                }
+                throw error;
+            }
+        }
+
+        // 取得並顯示颱風警報 (W-C0034-005)
+        async function getTyphoonWarnings() {
+            showLoading('typhoon');
+            try {
+                const records = await fetchCWAData(API_ENDPOINTS.typhoon);
+                console.log('Typhoon records received:', records);
+                const contentDiv = document.getElementById('typhoonContent');
+                contentDiv.innerHTML = '';
+
+                const cycloneList = records.tropicalCyclones?.tropicalCyclone ?? [];
+
+                if (cycloneList.length === 0) {
+                    contentDiv.innerHTML = '<p class="text-center text-gray-400">目前無颱風消息或警報。</p>';
+                    return;
+                }
+
+                cycloneList.forEach((cyclone, index) => {
+                    const name = cyclone.typhoonName ?? "未知";
+                    const latestAnalysisFix = cyclone.analysisData?.fix?.[0];
+                    const issueTime = latestAnalysisFix?.fixTime ?? 'N/A';
+                    const windSpeed = latestAnalysisFix?.maxWindSpeed ?? "？";
+                    const pressure = latestAnalysisFix?.pressure ?? "？";
+                    const coordinate = latestAnalysisFix?.coordinate;
+                    let centerLocationLat = 'N/A';
+                    let centerLocationLon = 'N/A';
+                    if (coordinate) {
+                        const coords = coordinate.split(',');
+                        centerLocationLon = coords[0] ?? 'N/A';
+                        centerLocationLat = coords[1] ?? 'N/A';
+                    }
+                    
+                    const movementDirection = latestAnalysisFix?.movingDirection ?? 'N/A';
+                    const movementSpeed = latestAnalysisFix?.movingSpeed ?? 'N/A';
+
+                    let state = "活動中熱帶氣旋";
+                    if (cyclone.cwaTyNo) {
+                        state = "颱風";
+                    } else if (cyclone.cwaTdNo) {
+                        state = "熱帶性低氣壓";
+                    } else {
+                        const immediateForecastFix = cyclone.forecastData?.fix?.[0];
+                        if (immediateForecastFix?.stateTransfers?.[0]?.value) {
+                            state = immediateForecastFix.stateTransfers[0].value;
+                        }
+                    }
+
+                    const typhoonSubSectionDiv = document.createElement('div');
+                    typhoonSubSectionDiv.id = `typhoonSubSection-${index}`;
+                    typhoonSubSectionDiv.className = `mb-4 ${index > 0 ? 'mt-6' : ''}`;
+
+                    typhoonSubSectionDiv.innerHTML = `
+                        <h3 class="collapsible-header">${name} (${state}) <span class="collapse-icon">▼</span></h3>
+                        <div class="collapsible-content">
+                            <div class="mb-4 p-4 bg-red-800 border border-red-700 rounded-lg shadow-sm">
+                                <p class="text-red-200"><strong>發布時間:</strong> ${issueTime}</p>
+                                <p class="text-red-200"><strong>風速:</strong> ${windSpeed} m/s</p>
+                                <p class="text-red-200"><strong>氣壓:</strong> ${pressure} hPa</p>
+                                <p class="text-red-100"><strong>中心位置:</strong> ${centerLocationLat}°N, ${centerLocationLon}°E</p>
+                                <p class="text-red-100"><strong>移動方向/速度:</strong> ${movementDirection} ${movementSpeed} km/h</p>
+                            </div>
+                        </div>
+                    `;
+                    contentDiv.appendChild(typhoonSubSectionDiv);
+                });
+
+                document.querySelectorAll('#typhoonContent .collapsible-header').forEach(header => {
+                    header.removeEventListener('click', toggleCollapse);
+                    header.addEventListener('click', toggleCollapse);
+                });
+
+            } catch (error) {
+                showError('typhoon', error.message);
+            }
+        }
+
+        // 取得並顯示顯著有感地震報告 (E-A0015-001)
+        async function getSignificantEarthquakeReports(targetContentDivId = 'significantEarthquakeContent') {
+            const contentDiv = document.getElementById(targetContentDivId);
+            const errorDiv = document.getElementById(targetContentDivId.replace('Content', 'Error'));
+            contentDiv.innerHTML = `<div class="loading-spinner"></div><p class="text-center text-gray-400">載入顯著有感地震報告中...</p>`;
+            errorDiv.classList.add('hidden');
+
+            try {
+                const records = await fetchCWAData(API_ENDPOINTS.significantEarthquake);
+                console.log('Significant Earthquake records received:', records);
+                contentDiv.innerHTML = '';
+
+                const earthquakeList = records.Earthquake ?? [];
+
+                if (earthquakeList.length === 0) {
+                    contentDiv.innerHTML = '<p class="text-center text-gray-400">目前無顯著有感地震報告。</p>';
+                    return;
+                }
+
+                earthquakeList.forEach(eq => {
+                    const div = document.createElement('div');
+                    div.className = 'mb-4 p-4 bg-blue-800 border border-blue-700 rounded-lg shadow-sm';
+                    div.innerHTML = `
+                        <h3 class="text-blue-300 font-semibold">${eq.ReportContent?.ReportTime ?? 'N/A'} 地震報告</h3>
+                        <p class="text-blue-200"><strong>發生時間:</strong> ${eq.EarthquakeInfo?.OriginTime ?? 'N/A'}</p>
+                        <p class="text-blue-200"><strong>震央位置:</strong> ${eq.EarthquakeInfo?.Epicenter?.Location ?? 'N/A'} (${eq.EarthquakeInfo?.Epicenter?.EpicenterLatitude ?? 'N/A'}°N, ${eq.EarthquakeInfo?.Epicenter?.EpicenterLongitude ?? 'N/A'}°E)</p>
+                        <p class="text-blue-200"><strong>深度:</strong> ${eq.EarthquakeInfo?.FocalDepth ?? 'N/A'} 公里</p>
+                        <p class="text-blue-200"><strong>規模:</strong> ${eq.EarthquakeInfo?.EarthquakeMagnitude?.MagnitudeValue ?? 'N/A'} (${eq.EarthquakeInfo?.EarthquakeMagnitude?.MagnitudeType ?? 'N/A'})</p>
+                        <p class="text-blue-200"><strong>最大震度:</strong> ${eq.Intensity?.ShakingArea?.[0]?.AreaIntensity ?? 'N/A'}級 (${eq.Intensity?.ShakingArea?.[0]?.AreaDesc ?? 'N/A'})</p>
+                        <p class="text-blue-100">${eq.ReportContent?.Web ?? '無詳細內容'}</p>
+                        ${eq.ReportImageURI ? `<img src="${eq.ReportImageURI}" alt="地震報告圖" class="mt-2 rounded-md max-w-full h-auto">` : ''}
+                    `;
+                    contentDiv.appendChild(div);
+                });
+            } catch (error) {
+                showError(targetContentDivId.replace('Content', ''), error.message);
+            }
+        }
+
+        // 取得並顯示小區域有感地震報告 (E-A0016-001)
+        async function getMinorEarthquakeReports(targetContentDivId = 'minorEarthquakeContent') {
+            const contentDiv = document.getElementById(targetContentDivId);
+            const errorDiv = document.getElementById(targetContentDivId.replace('Content', 'Error'));
+            contentDiv.innerHTML = `<div class="loading-spinner"></div><p class="text-center text-gray-400">載入小區域有感地震報告中...</p>`;
+            errorDiv.classList.add('hidden');
+
+            try {
+                const records = await fetchCWAData(API_ENDPOINTS.minorEarthquake);
+                console.log('Minor Earthquake records received:', records);
+                contentDiv.innerHTML = '';
+
+                const earthquakeList = records.Earthquake ?? [];
+
+                if (earthquakeList.length === 0) {
+                    contentDiv.innerHTML = '<p class="text-center text-gray-400">目前無小區域有感地震報告。</p>';
+                    return;
+                }
+
+                earthquakeList.forEach(eq => {
+                    const div = document.createElement('div');
+                    div.className = 'mb-4 p-4 bg-purple-800 border border-purple-700 rounded-lg shadow-sm';
+                    div.innerHTML = `
+                        <h3 class="text-purple-300 font-semibold">${eq.ReportContent?.ReportTime ?? 'N/A'} 小區域地震報告</h3>
+                        <p class="text-purple-200"><strong>發生時間:</strong> ${eq.EarthquakeInfo?.OriginTime ?? 'N/A'}</p>
+                        <p class="text-purple-200"><strong>震央位置:</strong> ${eq.EarthquakeInfo?.Epicenter?.Location ?? 'N/A'} (${eq.EarthquakeInfo?.Epicenter?.EpicenterLatitude ?? 'N/A'}°N, ${eq.EarthquakeInfo?.Epicenter?.EpicenterLongitude ?? 'N/A'}°E)</p>
+                        <p class="text-purple-200"><strong>深度:</strong> ${eq.EarthquakeInfo?.FocalDepth ?? 'N/A'} 公里</p>
+                        <p class="text-purple-200"><strong>規模:</strong> ${eq.EarthquakeInfo?.EarthquakeMagnitude?.MagnitudeValue ?? 'N/A'} (${eq.EarthquakeInfo?.EarthquakeMagnitude?.MagnitudeType ?? 'N/A'})</p>
+                        <p class="text-purple-100">${eq.ReportContent?.Web ?? '無詳細內容'}</p>
+                        ${eq.ReportImageURI ? `<img src="${eq.ReportImageURI}" alt="地震報告圖" class="mt-2 rounded-md max-w-full h-auto">` : ''}
+                    `;
+                    contentDiv.appendChild(div);
+                });
+            } catch (error) {
+                showError(targetContentDivId.replace('Content', ''), error.message);
+            }
+        }
+
+        // 取得並顯示自動雨量站資料 (O-A0002-001) - 監測專區的子區塊
+        async function getAutomaticRainfallData() {
+            showLoading('automaticRainfall');
+            try {
+                const records = await fetchCWAData(API_ENDPOINTS.automaticRainfall);
+                console.log('Automatic Rainfall records received:', records);
+                const contentDiv = document.getElementById('automaticRainfallContent');
+                contentDiv.innerHTML = '';
+
+                const stationList = records.Station ?? [];
+
+                if (stationList.length === 0) {
+                    contentDiv.innerHTML = '<p class="text-center text-gray-400">目前無自動雨量站資料。</p>';
+                    return;
+                }
+
+                stationList.forEach(station => {
+                    const stationName = station.StationName ?? 'N/A';
+                    const obsTime = station.ObsTime?.DateTime ?? 'N/A';
+                    // 根據新的 JSON 結構，雨量資訊在 RainfallElement 下
+                    const precipitationNow = station.RainfallElement?.Now?.Precipitation ?? 'N/A';
+                    const precipitationPast1hr = station.RainfallElement?.Past1hr?.Precipitation ?? 'N/A';
+                    const precipitationPast24hr = station.RainfallElement?.Past24hr?.Precipitation ?? 'N/A';
+                    const rainfallUnit = '毫米'; // 假設單位是毫米
+
+                    const div = document.createElement('div');
+                    div.className = 'mb-2 p-3 bg-blue-900 border border-blue-800 rounded-lg shadow-sm';
+                    div.innerHTML = `
+                        <p class="text-blue-200"><strong>測站:</strong> ${stationName} (${station.StationId ?? 'N/A'})</p>
+                        <p class="text-blue-300"><strong>觀測時間:</strong> ${obsTime}</p>
+                        <p class="text-blue-100"><strong>即時雨量:</strong> ${precipitationNow} ${rainfallUnit}</p>
+                        <p class="text-blue-100"><strong>過去 1 小時雨量:</strong> ${precipitationPast1hr} ${rainfallUnit}</p>
+                        <p class="text-blue-100"><strong>過去 24 小時雨量:</strong> ${precipitationPast24hr} ${rainfallUnit}</p>
+                    `;
+                    contentDiv.appendChild(div);
+                });
+            } catch (error) {
+                showError('automaticRainfall', error.message);
+            }
+        }
+
+        // 取得並顯示日出日沒及太陽過中天時刻資料 (A-B0062-001) - 監測專區的子區塊
+        async function getSunriseSunsetData() {
+            showLoading('sunriseSunset');
+            try {
+                // 為了獲取所有縣市的資料，我們不傳遞 LocationName 參數，並在 fetchCWAData 中設定了 limit 2000
+                const records = await fetchCWAData(API_ENDPOINTS.sunriseSunset);
+                console.log('Sunrise/Sunset records received:', records);
+                const contentDiv = document.getElementById('sunriseSunsetContent');
+                contentDiv.innerHTML = '';
+
+                // 根據新的 JSON 結構，資料在 records.locations.location
+                const locationList = records.locations?.location ?? [];
+
+                if (locationList.length === 0) {
+                    contentDiv.innerHTML = '<p class="text-center text-gray-400">目前無日出日沒及太陽過中天時刻資料。</p>';
+                    return;
+                }
+
+                // 只顯示每個地點的最新一筆資料
+                locationList.forEach(location => {
+                    const locationName = location.CountyName ?? 'N/A'; // 根據新的 JSON 結構，地點名稱是 CountyName
+                    const timeData = location.time?.[0]; // 根據新的 JSON 結構，時間資料在 location.time
+
+                    if (!timeData) {
+                        return; // 如果沒有時間資料，跳過這個地點
+                    }
+
+                    const date = timeData.Date ?? 'N/A';
+                    const sunriseTime = timeData.SunRiseTime ?? 'N/A';
+                    const sunsetTime = timeData.SunSetTime ?? 'N/A';
+                    const solarNoonTime = timeData.SunTransitTime ?? 'N/A'; // 太陽過中天時間
+                    const sunriseAzimuth = timeData.SunRiseAZ ?? 'N/A'; // 日出方位
+                    const sunsetAzimuth = timeData.SunSetAZ ?? 'N/A'; // 日沒方位
+                    const solarNoonElevation = timeData.SunTransitAlt ?? 'N/A'; // 太陽過中天仰角
+
+                    const div = document.createElement('div');
+                    div.className = 'mb-2 p-3 bg-indigo-900 border border-indigo-800 rounded-lg shadow-sm';
+                    div.innerHTML = `
+                        <p class="text-indigo-200"><strong>地點:</strong> ${locationName}</p>
+                        <p class="text-indigo-300"><strong>日期:</strong> ${date}</p>
+                        <p class="text-indigo-100"><strong>日出時間:</strong> ${sunriseTime} (方位: ${sunriseAzimuth}°)</p>
+                        <p class="text-indigo-100"><strong>日沒時間:</strong> ${sunsetTime} (方位: ${sunsetAzimuth}°)</p>
+                        <p class="text-indigo-100"><strong>太陽過中天時間:</strong> ${solarNoonTime} (仰角: ${solarNoonElevation}°)</p>
+                    `;
+                    contentDiv.appendChild(div);
+                });
+            } catch (error) {
+                showError('sunriseSunset', error.message);
+            }
+        }
+
+
+        // 取得並顯示警報、特報 (W-C0033-002)
+        async function getWarnings() {
+            showLoading('warnings');
+            try {
+                const records = await fetchCWAData(API_ENDPOINTS.warnings);
+                console.log('Warnings records received:', records);
+                const contentDiv = document.getElementById('warningsContent');
+                contentDiv.innerHTML = '';
+
+                const alertList = records.record ?? [];
+
+                if (alertList.length === 0) {
+                    contentDiv.innerHTML = '<p class="text-center text-gray-400">目前無警報或特報。</p>';
+                    return;
+                }
+
+                alertList.forEach((record, index) => {
+                    const issueTime = record.datasetInfo?.issueTime ?? 'N/A';
+                    const alertType = record.hazardConditions?.hazards?.hazard?.[0]?.info?.phenomena ?? 'N/A';
+                    const significance = record.hazardConditions?.hazards?.hazard?.[0]?.info?.significance ?? 'N/A';
+                    const affectedAreas = record.hazardConditions?.hazards?.hazard?.[0]?.info?.affectedAreas?.location?.map(loc => loc.locationName).join('、') ?? 'N/A';
+                    const description = record.contents?.content?.contentText ?? '無詳細內容';
+
+                    let isActive = false;
+                    const validTime = record.datasetInfo?.validTime;
+                    if (validTime && validTime.startTime && validTime.endTime) {
+                        const startTime = new Date(validTime.startTime);
+                        const endTime = new Date(validTime.endTime);
+                        const currentTime = new Date();
+                        isActive = currentTime >= startTime && currentTime <= endTime;
+                    }
+
+                    const warningSubSectionDiv = document.createElement('div');
+                    warningSubSectionDiv.id = `warningSubSection-${index}`;
+                    warningSubSectionDiv.className = `mb-4 ${index > 0 ? 'mt-6' : ''}`;
+
+                    warningSubSectionDiv.innerHTML = `
+                        <h3 class="collapsible-header">${alertType} (${significance}) - ${issueTime.substring(0, 10)} <span class="collapse-icon">▼</span></h3>
+                        <div class="collapsible-content">
+                            <div class="mb-4 p-4 rounded-lg shadow-sm ${isActive ? 'warning-active' : 'warning-inactive'}">
+                                <p><strong>發布時間:</strong> ${issueTime}</p>
+                                <p><strong>特報種類:</strong> ${alertType}</p>
+                                <p><strong>影響區域:</strong> ${affectedAreas}</p>
+                                <p>${description.replace(/\n/g, '<br>')}</p>
+                            </div>
+                        </div>
+                    `;
+                    contentDiv.appendChild(warningSubSectionDiv);
+                });
+
+                document.querySelectorAll('#warningsContent .collapsible-header').forEach(header => {
+                    header.removeEventListener('click', toggleCollapse);
+                    header.addEventListener('click', toggleCollapse);
+                });
+
+            } catch (error) {
+                showError('warnings', error.message);
+            }
+        }
+
+        // 顯示指定主區塊的函數，並展開其內容
+        function showSection(targetId) {
+            document.querySelectorAll('#contentSections > .card').forEach(section => {
+                section.classList.add('hidden');
+                const mainContent = section.querySelector('.collapsible-content');
+                const mainIcon = section.querySelector('.collapsible-header .collapse-icon');
+                if (mainContent) {
+                    mainContent.classList.remove('expanded');
+                }
+                if (mainIcon) {
+                    mainIcon.classList.remove('rotated');
+                }
+                // 對於所有主區塊，也收合其子區塊
+                section.querySelectorAll('.collapsible-content').forEach(subContent => {
+                    subContent.classList.remove('expanded');
+                });
+                section.querySelectorAll('.collapse-icon').forEach(subIcon => {
+                    subIcon.classList.remove('rotated');
+                });
+            });
+
+            const targetSection = document.getElementById(targetId);
+            if (targetSection) {
+                targetSection.classList.remove('hidden');
+                const mainContent = targetSection.querySelector('.collapsible-content');
+                const mainIcon = targetSection.querySelector('.collapsible-header .collapse-icon');
+                if (mainContent) {
+                    mainContent.classList.add('expanded');
+                }
+                if (mainIcon) {
+                    mainIcon.classList.add('rotated');
+                }
+            }
+
+            document.querySelectorAll('.nav-button').forEach(button => {
+                if (button.dataset.target === targetId) {
+                    button.classList.add('active');
+                } else {
+                    button.classList.remove('active');
+                }
+            });
+        }
+
+        // 處理所有可拉縮標題的函數 (通用於 h2 和 h3)
+        function toggleCollapse(event) {
+            const header = event.currentTarget;
+            const content = header.nextElementSibling;
+            const icon = header.querySelector('.collapse-icon');
+
+            if (content && icon) {
+                content.classList.toggle('expanded');
+                icon.classList.toggle('rotated');
+            }
+        }
+
+        // 載入所有資料的函數 (只在頁面載入時執行一次)
+        async function loadAllData() {
+            await Promise.all([
+                getTyphoonWarnings(),
+                getSignificantEarthquakeReports('significantEarthquakeContent'),
+                getMinorEarthquakeReports('minorEarthquakeContent'),
+                getAutomaticRainfallData(), // 自動雨量站資料
+                getSunriseSunsetData(), // 新增的日出日沒資料
+                getWarnings()
+            ]).catch(error => {
+                console.error("載入部分或全部資料時發生錯誤:", error);
+            });
+        }
+
+        // 頁面載入完成後執行
+        document.addEventListener('DOMContentLoaded', () => {
+            loadAllData();
+
+            document.querySelectorAll('.nav-button').forEach(button => {
+                button.addEventListener('click', (event) => {
+                    const targetId = event.target.dataset.target;
+                    showSection(targetId);
+                });
+            });
+
+            document.querySelectorAll('.collapsible-header').forEach(header => {
+                header.addEventListener('click', toggleCollapse);
+            });
+
+            showSection('typhoonSection');
+        });
+    </script>
+</body>
+</html>
