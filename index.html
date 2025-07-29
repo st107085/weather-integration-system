@@ -1,0 +1,952 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google Chat Webhook 發送器</title>
+    <!-- 引入 Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 使用 Inter 字體 */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #1a202c; /* 深灰色背景 */
+            color: #e2e8f0; /* 淺色文字 */
+        }
+        /* 自定義滾動條樣式，使其更美觀 (針對 textarea，雖然現在大多數改成 input 但保留以防萬一) */
+        textarea::-webkit-scrollbar {
+            width: 8px;
+        }
+        textarea::-webkit-scrollbar-track {
+            background: #2d3748; /* 深色滾動條軌道 */
+            border-radius: 10px;
+        }
+        textarea::-webkit-scrollbar-thumb {
+            background: #4a5568; /* 深色滾動條拇指 */
+            border-radius: 10px;
+        }
+        textarea::-webkit-scrollbar-thumb:hover {
+            background: #616e7f;
+        }
+        /* 針對動態輸入框的樣式 */
+        .input-group label {
+            display: block;
+            margin-bottom: 4px;
+            font-size: 0.875rem; /* text-sm */
+            font-weight: 600; /* font-semibold */
+            color: #cbd5e0; /* text-gray-300 */
+        }
+        .input-group input, .input-group select, .input-group textarea {
+            width: 100%;
+            padding: 0.75rem 1rem; /* px-4 py-3 */
+            border: 1px solid #4a5568; /* 深色邊框 */
+            border-radius: 0.5rem; /* rounded-lg */
+            outline: none;
+            transition: all 0.2s ease-in-out;
+            background-color: #2d3748; /* 深色輸入框背景 */
+            color: #e2e8f0; /* 淺色輸入框文字 */
+        }
+        .input-group input:focus, .input-group select:focus, .input-group textarea:focus {
+            ring-width: 2px;
+            ring-color: #63b3ed; /* 更亮的藍色光暈 */
+            border-color: #63b3ed;
+        }
+
+        /* 可折疊區塊的標題樣式 */
+        .collapsible-header {
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-right: 2rem; /* 為移除按鈕留空間 */
+            position: relative; /* 為了移除按鈕的定位 */
+        }
+
+        /* 箭頭圖示的旋轉動畫 */
+        .collapsible-icon {
+            transition: transform 0.2s ease-in-out;
+        }
+        .collapsible-icon.rotated {
+            transform: rotate(180deg);
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4 md:p-8 lg:p-12">
+    <div class="bg-gray-800 p-6 sm:p-8 rounded-lg shadow-xl w-full max-w-sm sm:max-w-md md:max-w-lg lg:max-w-xl border border-gray-700">
+        <h1 class="text-2xl sm:text-3xl font-bold text-center text-gray-100 mb-4 sm:mb-6">Google Chat Webhook 發送器</h1>
+        <p class="text-sm sm:text-base text-gray-300 text-center mb-4 sm:mb-6">在這裡輸入你的訊息，訊息將發送至所有設定的聊天室。</p>
+
+        <!-- 分類選擇區 -->
+        <div class="mb-4">
+            <label for="categorySelect" class="block text-gray-200 text-sm font-semibold mb-2">
+                選擇分類 (選填)：
+            </label>
+            <select id="categorySelect" class="w-full px-3 py-2 sm:px-4 sm:py-3 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 transition duration-200 ease-in-out text-sm sm:text-base bg-gray-700 text-gray-100">
+                <option value="">-- 不選擇分類 --</option>
+                <option value="地震報告">地震報告</option>
+                <option value="颱風報告">颱風報告</option>
+                <option value="全國停班停課報告">全國停班停課報告</option>
+                <option value="即時報告">即時報告</option>
+                <option value="更新報告">更新報告</option>
+                <option value="政策執行與解除報告">政策執行與解除報告</option>
+                <option value="一般報告">一般報告</option>
+                <option value="活動報告">活動報告</option>
+                <option value="群組公告">群組公告</option>
+                <option value="台灣各地天氣預報">台灣各地天氣預報</option>
+                <option value="天氣新聞報告">天氣新聞報告</option> <!-- 新增天氣新聞報告分類 -->
+            </select>
+        </div>
+
+        <!-- 動態訊息輸入區 (會根據分類生成不同欄位) -->
+        <div id="dynamicMessageSection" class="mb-4">
+            <!-- 這裡將根據選擇的分類動態生成輸入欄位 -->
+        </div>
+        
+        <!-- 天氣預報輸入區 (預設隱藏，當選擇天氣預報時顯示) -->
+        <div id="weatherReportContainer" class="hidden">
+            <h3 class="text-base sm:text-lg font-bold text-gray-100 mb-4">台灣各地天氣預報詳情</h3>
+            <div class="mb-4 input-group">
+                <label for="weatherReportTime" class="block text-gray-200 text-sm font-semibold mb-2">
+                    時間：
+                </label>
+                <input type="text" id="weatherReportTime" class="w-full text-sm sm:text-base" placeholder="例如：2025/07/29 17:00">
+            </div>
+            <div class="mb-4 input-group">
+                <label for="weatherReportPublisher" class="block text-gray-200 text-sm font-semibold mb-2">
+                    發布單位：
+                </label>
+                <input type="text" id="weatherReportPublisher" class="w-full text-sm sm:text-base" placeholder="例如：中央氣象署">
+            </div>
+
+            <div id="regionInputs" class="space-y-4 sm:space-y-6 mb-4">
+                <!-- 動態生成的地區輸入欄位將會顯示在這裡 -->
+            </div>
+
+            <button id="addRegionButton" type="button" class="w-full py-2 px-4 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-75 mb-6 text-sm sm:text-base">
+                新增地區
+            </button>
+
+            <div class="mb-4 input-group">
+                <label for="weatherReportNotes" class="block text-gray-200 text-sm font-semibold mb-2">
+                    整體注意事項：
+                </label>
+                <input type="text" id="weatherReportNotes" class="w-full text-sm sm:text-base" placeholder="例如：請注意天氣變化，做好防護措施。">
+            </div>
+        </div>
+
+        <!-- 全國停班停課報告輸入區 (預設隱藏，當選擇時顯示) -->
+        <div id="nationalClosureReportContainer" class="hidden">
+            <h3 class="text-base sm:text-lg font-bold text-gray-100 mb-4">全國停班停課報告詳情</h3>
+            <div class="mb-4 input-group">
+                <label for="closureReportTime" class="block text-gray-200 text-sm font-semibold mb-2">
+                    發布時間：
+                </label>
+                <input type="text" id="closureReportTime" class="w-full text-sm sm:text-base" placeholder="例如：2025/07/29 20:00 (自動填入)">
+            </div>
+            
+            <div id="regionalClosureInputs" class="space-y-4 sm:space-y-6 mb-4">
+                <!-- 動態生成的地區停課情況輸入欄位將會顯示在這裡 -->
+            </div>
+
+            <button id="addRegionalClosureButton" type="button" class="w-full py-2 px-4 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-75 mb-6 text-sm sm:text-base">
+                新增地區停課情況
+            </button>
+
+            <div class="mb-4 input-group">
+                <label for="closureOverallNotes" class="block text-gray-200 text-sm font-semibold mb-2">
+                    整體備註：
+                </label>
+                <input type="text" id="closureOverallNotes" class="w-full text-sm sm:text-base" placeholder="例如：請留意最新公告">
+            </div>
+        </div>
+
+
+        <!-- 檔案上傳區 -->
+        <div class="mb-4">
+            <label for="fileInput" class="block text-gray-200 text-sm font-semibold mb-2">
+                選擇檔案 (選填)：
+            </label>
+            <div class="flex items-center space-x-2">
+                <input type="file" id="fileInput" class="hidden">
+                <button id="selectFileButton" type="button" class="px-3 py-2 sm:px-4 sm:py-2 bg-gray-700 text-gray-100 rounded-lg hover:bg-gray-600 transition duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-400 text-sm sm:text-base">
+                    選擇檔案
+                </button>
+                <span id="fileNameDisplay" class="text-gray-400 text-xs sm:text-sm truncate max-w-[calc(100%-120px)]">未選擇任何檔案</span>
+                <button id="clearFileButton" type="button" class="hidden text-red-400 hover:text-red-300 text-xs sm:text-sm ml-2 focus:outline-none">
+                    <!-- SVG icon for clear button -->
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- 圖片 URL 輸入區 (現在是多張圖片) -->
+        <div class="mb-6">
+            <h3 class="text-base sm:text-lg font-bold text-gray-100 mb-4">圖片網址清單 (選填)</h3>
+            <div id="imageInputsContainer" class="space-y-4 sm:space-y-6 mb-4">
+                <!-- 動態生成的圖片網址輸入欄位將會顯示在這裡 -->
+            </div>
+            <button id="addImageUrlButton" type="button" class="w-full py-2 px-4 bg-purple-600 text-white font-bold rounded-lg hover:bg-purple-700 transition duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-75 mb-6 text-sm sm:text-base">
+                新增圖片網址
+            </button>
+        </div>
+
+
+        <!-- 發送按鈕 -->
+        <button id="sendButton" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-75 text-base sm:text-lg">
+            <span id="buttonText">發送訊息到所有聊天室</span>
+            <span id="loadingSpinner" class="hidden inline-block animate-spin rounded-full h-5 w-5 border-2 border-t-2 border-white border-t-transparent"></span>
+        </button>
+
+        <!-- 結果顯示區 -->
+        <div id="resultDisplay" class="mt-4 sm:mt-6 p-3 sm:p-4 rounded-lg text-left text-xs sm:text-sm font-medium hidden"></div>
+    </div>
+
+    <script>
+        // 在這裡存放你提供的 Webhook URL
+        const webhookUrls = [
+            "https://chat.googleapis.com/v1/spaces/AAQAEpmPi7A/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=m1vCKNwUBYpKoqA8VwDAEuDaEYew0ZKpM3YsxW19YO4",
+            "https://chat.googleapis.com/v1/spaces/AAQA_I3rODg/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=ZkApytU6tJ7H_UoVua7CZhdUcsjF6mVELsVE4wyrpmw",
+            "https://chat.googleapis.com/v1/spaces/AAQAzU2510g/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=FHlwfUokJqbOUpFBSk_EMI4Dk__czzrJYHTWXf8ynbc",
+            "https://chat.googleapis.com/v1/spaces/AAAAv67v6PM/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=9o-DpEWOO3NJMk1Q4GBzPKetzU9Vu-aZjKRYTzGdgfo"
+        ];
+
+        // 定義每個分類所需的欄位及其預設的 placeholder 提示 (針對非特殊模式的分類)
+        const categoryFieldDefinitions = {
+            "地震報告": [
+                { name: "時間", placeholder: "例如：2025/07/29 18:30" },
+                { name: "地點", placeholder: "例如：花蓮外海" },
+                { name: "震度", placeholder: "例如：最大震度4級" },
+                { name: "備註", placeholder: "例如：請注意後續餘震" }
+            ],
+            "颱風報告": [
+                { name: "颱風名稱", placeholder: "例如：梅花颱風" },
+                { name: "發布時間", placeholder: "例如：2025/07/29 17:00" },
+                { name: "路徑", placeholder: "例如：預計從台灣東部海面北上" },
+                { name: "影響", placeholder: "例如：北部、東北部有明顯降雨" },
+                { name: "備註", placeholder: "例如：請做好防颱準備" }
+            ],
+            // 全國停班停課報告 已移至特殊模式處理，不再此處定義
+            "即時報告": [
+                { name: "事件", placeholder: "例如：道路坍方" },
+                { name: "時間", placeholder: "例如：2025/07/29 16:45" },
+                { name: "地點", placeholder: "例如：國道三號南下100K處" },
+                { name: "情況", placeholder: "例如：雙向車道封閉，已進行搶修" },
+                { name: "備註", placeholder: "例如：請用路人改道" }
+            ],
+            "更新報告": [
+                { name: "原事件", placeholder: "例如：上次的道路坍方事件" },
+                { name: "更新內容", placeholder: "例如：國道三號南下100K處已恢復通車" },
+                { name: "更新時間", placeholder: "例如：2025/07/29 22:00" },
+                { name: "備註", placeholder: "例如：請留意交通資訊" }
+            ],
+            "政策執行與解除報告": [
+                { name: "政策名稱", placeholder: "例如：室內口罩佩戴規定" },
+                { name: "狀態", placeholder: "例如：解除" },
+                { name: "生效時間", placeholder: "例如：2025/08/01 00:00" },
+                { name: "說明", placeholder: "例如：除醫療院所外，室內無需佩戴口罩" },
+                { name: "備註", placeholder: "例如：請依循最新防疫指引" }
+            ],
+            "一般報告": [
+                { name: "主題", placeholder: "例如：學校期末考時程" },
+                { name: "內容", placeholder: "例如：期末考將於8月10日至12日舉行" },
+                { name: "時間", placeholder: "例如：2025/07/29" },
+                { name: "備註", placeholder: "例如：請同學提前準備" }
+            ],
+            "活動報告": [
+                { name: "活動名稱", placeholder: "例如：校園運動會" },
+                { name: "時間", placeholder: "例如：2025/09/15" },
+                { name: "地點", placeholder: "例如：校內操場" },
+                { name: "內容摘要", placeholder: "例如：本次運動會共設有田徑、球類等項目" },
+                { name: "成果", placeholder: "例如：學生參與度踴躍，圓滿成功" },
+                { name: "備註", placeholder: "例如：感謝所有參與師生" }
+            ],
+            "群組公告": [
+                { name: "主題", placeholder: "例如：社團招募新成員" },
+                { name: "內容", placeholder: "例如：歡迎對程式設計有興趣的同學加入" },
+                { name: "發布者", placeholder: "例如：資訊社社長小秋" },
+                { name: "備註", placeholder: "例如：詳情請洽社辦" }
+            ],
+            "天氣新聞報告": [ // 新增天氣新聞報告的欄位定義
+                { name: "新聞標題", placeholder: "例如：熱帶低壓發展，可能轉為輕度颱風" },
+                { name: "發布時間", placeholder: "例如：2025/07/29 10:00" },
+                { name: "報導內容摘要", placeholder: "例如：預計影響台灣南部地區，請注意海上活動" },
+                { name: "影響地區", placeholder: "例如：南部、東南部海域" },
+                { name: "提醒事項", placeholder: "例如：請避免前往海邊，留意氣象局最新資訊" },
+                { name: "新聞來源", placeholder: "例如：中央社 / 氣象局新聞稿" }
+            ]
+        };
+
+        // 取得 DOM 元素
+        const categorySelect = document.getElementById('categorySelect');
+        const dynamicMessageSection = document.getElementById('dynamicMessageSection'); // 動態生成欄位的容器 (通用分類用)
+        const weatherReportContainer = document.getElementById('weatherReportContainer'); // 天氣預報整體區塊
+        const weatherReportTime = document.getElementById('weatherReportTime');
+        const weatherReportPublisher = document.getElementById('weatherReportPublisher');
+        const regionInputsContainer = document.getElementById('regionInputs'); // 天氣預報的動態地區輸入容器
+        const addRegionButton = document.getElementById('addRegionButton');
+        const weatherReportNotes = document.getElementById('weatherReportNotes'); // 天氣預報的整體注意事項
+
+        // 全國停班停課相關 DOM 元素
+        const nationalClosureReportContainer = document.getElementById('nationalClosureReportContainer');
+        const closureReportTime = document.getElementById('closureReportTime');
+        const regionalClosureInputsContainer = document.getElementById('regionalClosureInputs'); // 全國停班停課的動態地區停課情況輸入容器
+        const addRegionalClosureButton = document.getElementById('addRegionalClosureButton');
+        const closureOverallNotes = document.getElementById('closureOverallNotes'); // 全國停班停課的整體備註
+
+        // 圖片 URL 輸入相關 DOM 元素
+        const imageUrlsContainer = document.getElementById('imageInputsContainer');
+        const addImageUrlButton = document.getElementById('addImageUrlButton');
+
+        const sendButton = document.getElementById('sendButton');
+        const buttonText = document.getElementById('buttonText');
+        const loadingSpinner = document.getElementById('loadingSpinner');
+        const resultDisplay = document.getElementById('resultDisplay');
+
+        // 檔案相關的 DOM 元素
+        const fileInput = document.getElementById('fileInput');
+        const selectFileButton = document.getElementById('selectFileButton');
+        const fileNameDisplay = document.getElementById('fileNameDisplay');
+        const clearFileButton = document.getElementById('clearFileButton');
+
+        let regionCounter = 0; // 用於給每個天氣地區區塊一個獨特的 ID
+        let regionalClosureCounter = 0; // 用於給每個停班停課地區區塊一個獨特的 ID
+        let imageInputCounter = 0; // 用於給每個圖片網址輸入框一個獨特的 ID
+
+
+        /**
+         * 顯示結果訊息
+         * @param {string} message - 要顯示的訊息
+         * @param {boolean} isError - 是否為錯誤訊息
+         */
+        function showResult(message, isError) {
+            resultDisplay.innerHTML = message;
+            resultDisplay.classList.remove('hidden', 'bg-green-900/30', 'text-green-400', 'bg-red-900/30', 'text-red-400');
+            if (isError) {
+                resultDisplay.classList.add('bg-red-900/30', 'text-red-400');
+            } else {
+                resultDisplay.classList.add('bg-green-900/30', 'text-green-400');
+            }
+        }
+
+        /**
+         * 處理單個 Webhook 的發送
+         * @param {string} url - Webhook URL
+         * @param {object} payload - 要發送的 JSON 物件 (可以是純文字或卡片訊息)
+         * @param {number} index - Webhook 的索引 (用於顯示是第幾個 Webhook)
+         * @returns {Promise<boolean>} - 表示是否成功
+         */
+        async function sendToWebhook(url, payload, index) {
+            let retries = 3;
+            let delay = 1000; // 1 秒
+
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(payload),
+                    });
+
+                    if (response.ok) {
+                        return true;
+                    } else {
+                        const errorData = await response.json();
+                        console.error(`Webhook ${index + 1} 發送失敗 (錯誤碼: ${response.status}):`, errorData);
+                        if (response.status === 429 && i < retries - 1) {
+                            await new Promise(res => setTimeout(res, delay));
+                            delay *= 2;
+                        } else {
+                            return false;
+                        }
+                    }
+                } catch (error) {
+                    console.error(`Webhook ${index + 1} 發送錯誤:`, error);
+                    if (i < retries - 1) {
+                        await new Promise(res => setTimeout(res, delay));
+                        delay *= 2;
+                    } else {
+                        return false;
+                    }
+                }
+            }
+            return false;
+        }
+
+        /**
+         * 為非天氣預報/停班停課分類動態生成輸入欄位
+         * @param {Array<Object>} fields - 欄位定義陣列，每個物件包含 name 和 placeholder
+         */
+        function createDynamicFields(fields) {
+            dynamicMessageSection.innerHTML = ''; // 清空現有欄位
+
+            if (!fields || fields.length === 0) {
+                // 如果沒有定義欄位，顯示一個通用輸入框
+                const div = document.createElement('div');
+                div.className = 'mb-4 input-group';
+                div.innerHTML = `
+                    <label for="generalMessageInput" class="block text-gray-200 text-sm font-semibold mb-2">
+                        訊息內容：
+                    </label>
+                    <input type="text" id="generalMessageInput" class="w-full text-sm sm:text-base" placeholder="請輸入訊息內容">
+                `;
+                dynamicMessageSection.appendChild(div);
+                return;
+            }
+
+            fields.forEach(field => {
+                const div = document.createElement('div');
+                div.className = 'mb-4 input-group';
+                div.innerHTML = `
+                    <label for="dynamic-field-${field.name}" class="block text-gray-200 text-sm font-semibold mb-2">
+                        ${field.name}：
+                    </label>
+                    <input type="text" id="dynamic-field-${field.name}" class="w-full text-sm sm:text-base" placeholder="${field.placeholder || ''}">
+                `;
+                dynamicMessageSection.appendChild(div);
+            });
+        }
+
+        /**
+         * 收集非天氣預報/停班停課分類的動態生成欄位內容
+         * @param {string} categoryName - 分類名稱
+         * @returns {string} 格式化後的訊息字串
+         */
+        function getDynamicFieldsContent(categoryName) {
+            const fields = categoryFieldDefinitions[categoryName];
+            if (!fields) return "";
+
+            let content = "";
+            fields.forEach(field => {
+                const inputElement = document.getElementById(`dynamic-field-${field.name}`);
+                const value = inputElement ? inputElement.value.trim() : '';
+                content += `${field.name}：${value || '未填寫'}\n`; // 每個欄位後自動換行，若空則顯示未填寫
+            });
+            return content.trim(); // 移除最後多餘的換行
+        }
+
+        /**
+         * 添加一個新的地區天氣輸入組
+         */
+        function addRegionWeatherInput(initialData = {}) {
+            regionCounter++;
+            const regionId = `region-${regionCounter}`;
+
+            const div = document.createElement('div');
+            div.className = 'input-group p-4 border border-gray-600 rounded-lg bg-gray-700 relative mb-4';
+            div.id = regionId;
+            div.innerHTML = `
+                <div class="collapsible-header flex items-center mb-3 text-sm sm:text-base">
+                    <h4 class="font-bold text-gray-200">地區 ${regionCounter}</h4>
+                    <svg class="collapsible-icon w-5 h-5 ml-auto text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                    </svg>
+                    <button type="button" class="remove-region-button absolute right-2 text-red-400 hover:text-red-300 text-sm font-bold focus:outline-none">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+                <div class="collapsible-content">
+                    <div class="mb-2">
+                        <label for="regionName-${regionId}">地區名稱：</label>
+                        <input type="text" id="regionName-${regionId}" class="w-full text-sm sm:text-base" placeholder="例如：臺南">
+                    </div>
+                    <div class="mb-2">
+                        <label for="weather-${regionId}">天氣：</label>
+                        <input type="text" id="weather-${regionId}" class="w-full text-sm sm:text-base" placeholder="例如：晴時多雲">
+                    </div>
+                    <div class="mb-2">
+                        <label for="temperature-${regionId}">溫度：</label>
+                        <input type="text" id="temperature-${regionId}" class="w-full text-sm sm:text-base" placeholder="例如：28°C - 32°C">
+                    </div>
+                    <div class="mb-2">
+                        <label for="rainChance-${regionId}">降雨機率：</label>
+                        <input type="text" id="rainChance-${regionId}" class="w-full text-sm sm:text-base" placeholder="例如：30%">
+                    </div>
+                    <div class="mb-2">
+                        <label for="comfort-${regionId}">舒適度：</label>
+                        <input type="text" id="comfort-${regionId}" class="w-full text-sm sm:text-base" placeholder="例如：悶熱">
+                    </div>
+                    <div class="mb-2">
+                        <label for="regionNotes-${regionId}">備註：</label>
+                        <input type="text" id="regionNotes-${regionId}" class="w-full text-sm sm:text-base" placeholder="例如：午後有局部雷陣雨">
+                    </div>
+                </div>
+            `;
+            regionInputsContainer.appendChild(div);
+
+            // 設置初始數據
+            if (initialData.name) document.getElementById(`regionName-${regionId}`).value = initialData.name;
+            if (initialData.weather) document.getElementById(`weather-${regionId}`).value = initialData.weather;
+            if (initialData.temperature) document.getElementById(`temperature-${regionId}`).value = initialData.temperature;
+            if (initialData.rainChance) document.getElementById(`rainChance-${regionId}`).value = initialData.rainChance;
+            if (initialData.comfort) document.getElementById(`comfort-${regionId}`).value = initialData.comfort;
+            if (initialData.notes) document.getElementById(`regionNotes-${regionId}`).value = initialData.notes;
+
+
+            // 添加移除按鈕的事件監聽器
+            div.querySelector('.remove-region-button').addEventListener('click', (event) => {
+                event.stopPropagation(); // 阻止事件冒泡到可折疊標題
+                div.remove();
+            });
+
+            // 添加可折疊功能的事件監聽器
+            div.querySelector('.collapsible-header').addEventListener('click', () => {
+                const content = div.querySelector('.collapsible-content');
+                const icon = div.querySelector('.collapsible-icon');
+                content.classList.toggle('hidden'); // 切換隱藏/顯示
+                icon.classList.toggle('rotated'); // 旋轉箭頭圖示
+            });
+        }
+
+        /**
+         * 收集所有地區天氣預報的資料並格式化成單一字串
+         * @returns {string} 格式化後的天氣預報字串
+         */
+        function getWeatherReportContent() {
+            const time = weatherReportTime.value.trim();
+            const publisher = weatherReportPublisher.value.trim();
+            const overallNotes = weatherReportNotes.value.trim();
+
+            let content = `時間：${time || '未填寫'}
+發布單位：${publisher || '未填寫'}
+
+---
+`;
+
+            const regionGroups = regionInputsContainer.querySelectorAll('.input-group');
+            if (regionGroups.length === 0) {
+                 content += "（無任何地區資訊）\n";
+            } else {
+                regionGroups.forEach((group, index) => {
+                    const id = group.id;
+                    const regionName = document.getElementById(`regionName-${id}`).value.trim();
+                    const weather = document.getElementById(`weather-${id}`).value.trim();
+                    const temperature = document.getElementById(`temperature-${id}`).value.trim();
+                    const rainChance = document.getElementById(`rainChance-${id}`).value.trim();
+                    const comfort = document.getElementById(`comfort-${id}`).value.trim();
+                    const regionNotes = document.getElementById(`regionNotes-${id}`).value.trim();
+
+                    content += `地區${index + 1}：${regionName || '未填寫'}
+天氣：${weather || '未填寫'}
+溫度：${temperature || '未填寫'}
+降雨機率：${rainChance || '未填寫'}
+舒適度：${comfort || '未填寫'}
+備註：${regionNotes || '未填寫'}
+
+---
+`;
+                });
+            }
+
+            content += `整體注意事項：${overallNotes || '無'}`;
+
+            return content;
+        }
+
+        /**
+         * 清空所有動態生成的地區輸入框 (天氣預報用)
+         */
+        function clearRegionInputs() {
+            regionInputsContainer.innerHTML = '';
+            regionCounter = 0; // 重置計數器
+            weatherReportTime.value = '';
+            weatherReportPublisher.value = '';
+            weatherReportNotes.value = '';
+        }
+
+        /**
+         * 添加一個新的地區停班停課情況輸入組
+         */
+        function addRegionalClosureInput(initialData = {}) {
+            regionalClosureCounter++;
+            const closureId = `closure-${regionalClosureCounter}`;
+
+            const div = document.createElement('div');
+            div.className = 'input-group p-4 border border-gray-600 rounded-lg bg-gray-700 relative mb-4';
+            div.id = closureId;
+            div.innerHTML = `
+                <div class="collapsible-header flex items-center mb-3 text-sm sm:text-base">
+                    <h4 class="font-bold text-gray-200">地區停課情況 ${regionalClosureCounter}</h4>
+                    <svg class="collapsible-icon w-5 h-5 ml-auto text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                    </svg>
+                    <button type="button" class="remove-regional-closure-button absolute right-2 text-red-400 hover:text-red-300 text-sm font-bold focus:outline-none">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+                <div class="collapsible-content">
+                    <div class="mb-2">
+                        <label for="closureRegionName-${closureId}">地區名稱：</label>
+                        <input type="text" id="closureRegionName-${closureId}" class="w-full text-sm sm:text-base" placeholder="例如：臺北市">
+                    </div>
+                    <div class="mb-2">
+                        <label for="closureStandardMet-${closureId}">是否已達停班停課標準：</label>
+                        <input type="text" id="closureStandardMet-${closureId}" class="w-full text-sm sm:text-base" placeholder="例如：是 / 依人事行政總處公告">
+                    </div>
+                    <div class="mb-2">
+                        <label for="closureStatus-${closureId}">停班停課情況：</label>
+                        <input type="text" id="closureStatus-${closureId}" class="w-full text-sm sm:text-base" placeholder="例如：停止上班、停止上課 / 照常上班、照常上課">
+                    </div>
+                    <div class="mb-2">
+                        <label for="closureNotes-${closureId}">備註：</label>
+                        <input type="text" id="closureNotes-${closureId}" class="w-full text-sm sm:text-base" placeholder="例如：依風雨預測資料判斷">
+                    </div>
+                </div>
+            `;
+            regionalClosureInputsContainer.appendChild(div);
+
+            // 設置初始數據
+            if (initialData.name) document.getElementById(`closureRegionName-${closureId}`).value = initialData.name;
+            if (initialData.standardMet) document.getElementById(`closureStandardMet-${closureId}`).value = initialData.standardMet;
+            if (initialData.status) document.getElementById(`closureStatus-${closureId}`).value = initialData.status;
+            if (initialData.notes) document.getElementById(`closureNotes-${closureId}`).value = initialData.notes;
+
+            // 添加移除按鈕的事件監聽器
+            div.querySelector('.remove-regional-closure-button').addEventListener('click', (event) => {
+                event.stopPropagation(); // 阻止事件冒泡到可折疊標題
+                div.remove();
+            });
+
+            // 添加可折疊功能的事件監聽器
+            div.querySelector('.collapsible-header').addEventListener('click', () => {
+                const content = div.querySelector('.collapsible-content');
+                const icon = div.querySelector('.collapsible-icon');
+                content.classList.toggle('hidden'); // 切換隱藏/顯示
+                icon.classList.toggle('rotated'); // 旋轉箭頭圖示
+            });
+        }
+
+        /**
+         * 收集所有全國停班停課報告的資料並格式化成單一字串
+         * @returns {string} 格式化後的報告字串
+         */
+        function getNationalClosureReportContent() {
+            const time = closureReportTime.value.trim();
+            const overallNotes = closureOverallNotes.value.trim();
+
+            let content = `發布時間：${time || '未填寫'}
+
+---
+`;
+
+            const closureGroups = regionalClosureInputsContainer.querySelectorAll('.input-group');
+            if (closureGroups.length === 0) {
+                 content += "（無任何地區停課資訊）\n";
+            } else {
+                closureGroups.forEach((group, index) => {
+                    const id = group.id;
+                    const regionName = document.getElementById(`closureRegionName-${id}`).value.trim();
+                    const standardMet = document.getElementById(`closureStandardMet-${id}`).value.trim(); // 新增欄位
+                    const status = document.getElementById(`closureStatus-${id}`).value.trim();
+                    const notes = document.getElementById(`closureNotes-${id}`).value.trim();
+
+                    content += `地區${index + 1}：${regionName || '未填寫'}
+是否已達停班停課標準：${standardMet || '未填寫'}
+停班停課情況：${status || '未填寫'}
+備註：${notes || '無'}
+
+---
+`;
+                });
+            }
+
+            content += `整體備註：${overallNotes || '無'}`;
+
+            return content;
+        }
+
+        /**
+         * 清空所有動態生成的地區輸入框 (天氣預報用)
+         */
+        function clearRegionInputs() {
+            regionInputsContainer.innerHTML = '';
+            regionCounter = 0; // 重置計數器
+            weatherReportTime.value = '';
+            weatherReportPublisher.value = '';
+            weatherReportNotes.value = '';
+        }
+
+        /**
+         * 清空所有動態生成的地區停班停課輸入框 (全國停班停課用)
+         */
+        function clearNationalClosureInputs() {
+            regionalClosureInputsContainer.innerHTML = '';
+            regionalClosureCounter = 0; // 重置計數器
+            closureReportTime.value = '';
+            closureOverallNotes.value = '';
+        }
+
+        /**
+         * 添加一個新的圖片網址輸入組
+         */
+        function addImageInput(initialUrl = '') {
+            imageInputCounter++;
+            const imageInputId = `image-url-${imageInputCounter}`;
+
+            const div = document.createElement('div');
+            div.className = 'input-group p-4 border border-gray-600 rounded-lg bg-gray-700 relative mb-4';
+            div.id = imageInputId;
+            div.innerHTML = `
+                <div class="collapsible-header flex items-center mb-3 text-sm sm:text-base">
+                    <h4 class="font-bold text-gray-200">圖片網址 ${imageInputCounter}</h4>
+                    <svg class="collapsible-icon w-5 h-5 ml-auto text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                    </svg>
+                    <button type="button" class="remove-image-button absolute right-2 text-red-400 hover:text-red-300 text-sm font-bold focus:outline-none">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+                <div class="collapsible-content">
+                    <input type="url" id="imageInput-${imageInputId}" class="w-full text-sm sm:text-base" placeholder="貼上圖片的公開網址 (例如：https://example.com/image.jpg)" value="${initialUrl}">
+                </div>
+            `;
+            imageUrlsContainer.appendChild(div);
+
+            // 添加移除按鈕的事件監聽器
+            div.querySelector('.remove-image-button').addEventListener('click', (event) => {
+                event.stopPropagation(); // 阻止事件冒泡到可折疊標題
+                div.remove();
+            });
+
+            // 添加可折疊功能的事件監聽器
+            div.querySelector('.collapsible-header').addEventListener('click', () => {
+                const content = div.querySelector('.collapsible-content');
+                const icon = div.querySelector('.collapsible-icon');
+                content.classList.toggle('hidden'); // 切換隱藏/顯示
+                icon.classList.toggle('rotated'); // 旋轉箭頭圖示
+            });
+        }
+
+        /**
+         * 收集所有圖片網址輸入框的值
+         * @returns {Array<string>} 圖片網址陣列
+         */
+        function getAllImageUrls() {
+            const urls = [];
+            const imageInputElements = imageUrlsContainer.querySelectorAll('input[type="url"]');
+            imageInputElements.forEach(input => {
+                const url = input.value.trim();
+                if (url) {
+                    urls.push(url);
+                }
+            });
+            return urls;
+        }
+
+        /**
+         * 清空所有動態生成的圖片網址輸入框
+         */
+        function clearImageInputs() {
+            imageUrlsContainer.innerHTML = '';
+            imageInputCounter = 0; // 重置計數器
+        }
+
+
+        // 檔案相關事件監聽器
+        selectFileButton.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files.length > 0) {
+                fileNameDisplay.textContent = fileInput.files[0].name;
+                clearFileButton.classList.remove('hidden');
+            } else {
+                fileNameDisplay.textContent = '未選擇任何檔案';
+                clearFileButton.classList.add('hidden');
+            }
+        });
+        clearFileButton.addEventListener('click', () => {
+            fileInput.value = '';
+            fileNameDisplay.textContent = '未選擇任何檔案';
+            clearFileButton.classList.add('hidden');
+        });
+        
+        // 為新增圖片網址按鈕添加事件監聽器
+        addImageUrlButton.addEventListener('click', () => addImageInput());
+
+        // 監聽分類選擇器的變化
+        categorySelect.addEventListener('change', () => {
+            const selectedValue = categorySelect.value;
+
+            // 統一清空並隱藏所有動態內容區塊
+            dynamicMessageSection.innerHTML = '';
+            weatherReportContainer.classList.add('hidden');
+            nationalClosureReportContainer.classList.add('hidden');
+            dynamicMessageSection.classList.add('hidden'); // 確保通用動態區塊也先隱藏
+
+            clearRegionInputs(); // 清空天氣預報區的內容
+            clearNationalClosureInputs(); // 清空全國停班停課報告區的內容
+            
+            // 清空文件和圖片
+            fileInput.value = '';
+            fileNameDisplay.textContent = '未選擇任何檔案';
+            clearFileButton.classList.add('hidden');
+            clearImageInputs(); // 清空所有圖片網址輸入框
+
+            if (selectedValue === '台灣各地天氣預報') {
+                weatherReportContainer.classList.remove('hidden'); // 顯示天氣預報區
+                
+                // 自動填入當前時間
+                const now = new Date();
+                const year = now.getFullYear();
+                const month = (now.getMonth() + 1).toString().padStart(2, '0');
+                const day = now.getDate().toString().padStart(2, '0');
+                const hours = now.getHours().toString().padStart(2, '0');
+                const minutes = now.getMinutes().toString().padStart(2, '0');
+                weatherReportTime.value = `${year}/${month}/${day} ${hours}:${minutes}`;
+
+                addRegionButton.click(); // 自動新增第一個地區輸入
+            } else if (selectedValue === '全國停班停課報告') {
+                nationalClosureReportContainer.classList.remove('hidden'); // 顯示全國停班停課報告區
+
+                // 自動填入當前時間
+                const now = new Date();
+                const year = now.getFullYear();
+                const month = (now.getMonth() + 1).toString().padStart(2, '0');
+                const day = now.getDate().toString().padStart(2, '0');
+                const hours = now.getHours().toString().padStart(2, '0');
+                const minutes = now.getMinutes().toString().padStart(2, '0');
+                closureReportTime.value = `${year}/${month}/${day} ${hours}:${minutes}`;
+
+                addRegionalClosureButton.click(); // 自動新增第一個地區停課情況輸入
+            }
+            else if (selectedValue) { // 如果選擇了其他非空分類 (通用動態欄位)
+                dynamicMessageSection.classList.remove('hidden'); // 顯示動態欄位區
+                createDynamicFields(categoryFieldDefinitions[selectedValue]); // 根據分類生成欄位
+            }
+            // 如果 selectedValue 為空，則所有區塊都保持隱藏 (初始狀態)
+        });
+
+        // 處理發送訊息的按鈕點擊事件
+        sendButton.addEventListener('click', async () => {
+            const selectedCategory = categorySelect.value;
+            let message = '';
+
+            if (selectedCategory === '台灣各地天氣預報') {
+                message = getWeatherReportContent(); // 從動態輸入中獲取內容
+            } else if (selectedCategory === '全國停班停課報告') {
+                message = getNationalClosureReportContent(); // 從停班停課動態輸入中獲取內容
+            }
+            else if (selectedCategory) { // 處理其他有定義欄位的分類
+                message = getDynamicFieldsContent(selectedCategory);
+            } else { // 如果沒有選擇分類，並且也沒有特殊模式
+                // 由於移除了 generalMessageInput，當沒有選擇分類時不應有內容
+                // 但為了確保應用健壯性，此處可保留檢查以防未來變動
+                const generalInput = document.getElementById('generalMessageInput'); 
+                message = generalInput ? generalInput.value.trim() : '';
+            }
+
+            const selectedFile = fileInput.files[0];
+            const imageUrls = getAllImageUrls(); // 獲取所有圖片網址
+
+            if (!message && !selectedFile && imageUrls.length === 0) { // 檢查是否有內容、檔案或圖片
+                showResult('請輸入訊息內容、選擇一個檔案或至少一個圖片網址！', true);
+                return;
+            }
+
+            let formattedMessageContent = '';
+            if (selectedCategory) {
+                formattedMessageContent += `【${selectedCategory}】\n`;
+            }
+            formattedMessageContent += message;
+
+            if (selectedFile) {
+                formattedMessageContent += `\n\n[附檔名稱：${selectedFile.name}] (提示：此處僅傳送檔案名稱，實際檔案需預先上傳至雲端空間，並在此處提供連結，才能在聊天室中查看。)`;
+            }
+
+            let payload;
+            if (imageUrls.length > 0) {
+                // 如果有多張圖片，構建卡片訊息
+                const imageWidgets = imageUrls.map(url => ({
+                    "image": {
+                        "imageUrl": url,
+                        "altText": "用戶上傳圖片" // 可以考慮讓用戶輸入每個圖片的altText
+                    }
+                }));
+
+                payload = {
+                    "cardsV2": [
+                        {
+                            "cardId": "message-card-" + Date.now(),
+                            "card": {
+                                "header": {
+                                    "title": "訊息與圖片報告",
+                                    "subtitle": selectedCategory ? `分類: ${selectedCategory}` : "無分類",
+                                    "imageUrl": "https://developers.google.com/chat/images/chat_product_icon.png"
+                                },
+                                "sections": [
+                                    {
+                                        "widgets": [
+                                            {
+                                                "textParagraph": {
+                                                    "text": formattedMessageContent
+                                                }
+                                            },
+                                            ...imageWidgets // 將所有圖片 widget 加入到 sections 中
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                };
+            } else {
+                // 沒有圖片，發送純文字訊息
+                payload = {
+                    "text": formattedMessageContent
+                };
+            }
+
+            buttonText.classList.add('hidden');
+            loadingSpinner.classList.remove('hidden');
+            sendButton.disabled = true;
+            resultDisplay.classList.add('hidden');
+
+            let allSuccessful = true;
+            let resultsHtml = '<ul>';
+
+            for (let i = 0; i < webhookUrls.length; i++) {
+                const url = webhookUrls[i];
+                const success = await sendToWebhook(url, payload, i);
+                if (success) {
+                    resultsHtml += `<li class="text-green-400">✅ 聊天室 Webhook ${i + 1}：發送成功！</li>`;
+                } else {
+                    resultsHtml += `<li class="text-red-400">❌ 聊天室 Webhook ${i + 1}：發送失敗！</li>`;
+                    allSuccessful = false;
+                }
+            }
+            resultsHtml += '</ul>';
+
+            if (allSuccessful) {
+                showResult(`所有訊息都已發送成功！<br>${resultsHtml}`, false);
+                // 清空所有輸入，包括動態生成的
+                categorySelect.value = ''; // 重置分類選擇，這會觸發change事件，自動清空並顯示預設區
+                fileInput.value = '';
+                fileNameDisplay.textContent = '未選擇任何檔案';
+                clearFileButton.classList.add('hidden');
+                clearImageInputs(); // 清空所有圖片網址輸入框
+            } else {
+                showResult(`部分或所有訊息發送失敗，請檢查。<br>${resultsHtml}`, true);
+            }
+
+            buttonText.classList.remove('hidden');
+            loadingSpinner.classList.add('hidden');
+            sendButton.disabled = false;
+        });
+
+        // 頁面載入時，自動清空所有輸入，並將分類選擇器重置為預設
+        document.addEventListener('DOMContentLoaded', () => {
+            categorySelect.value = ''; // 確保分類選擇器在頁面載入時是空的
+            dynamicMessageSection.innerHTML = ''; // 清空動態欄位
+            weatherReportContainer.classList.add('hidden'); // 隱藏天氣預報區
+            nationalClosureReportContainer.classList.add('hidden'); // 隱藏全國停班停課區
+            clearRegionInputs(); // 清空天氣預報區的內容
+            clearNationalClosureInputs(); // 清空全國停班停課報告區的內容
+            fileInput.value = '';
+            fileNameDisplay.textContent = '未選擇任何檔案';
+            clearFileButton.classList.add('hidden');
+            clearImageInputs(); // 清空所有圖片網址輸入框
+            addImageInput(); // 頁面載入時自動新增一個圖片網址輸入框
+        });
+    </script>
+</body>
+</html>
